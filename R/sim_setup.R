@@ -25,7 +25,7 @@
 #' graph <- OCN2graph(OCN)
 #'
 #' @export
-OCN2graph <- function(OCN) {
+convert_OCN_to_igraph <- function(OCN) {
   # Get geographic position
   nodes_coords <- expand.grid(c(1:OCN$dimX), 
                               c(1:OCN$dimY))[which(OCN$FD$toRN!=0),] %>%
@@ -50,10 +50,10 @@ OCN2graph <- function(OCN) {
 #' @author adapted from Claire Jacquet (OID: 10.1111/OIK.09372)
 #' 
 #' 
-OCN_generate <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
-                         outletPos = 3, expEnergy = 0.1, 
-                         coolingRate = 0.3, slope0 = 0.05,
-                         plot=TRUE) {
+generate_OCNigraph <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
+                               outletPos = 3, expEnergy = 0.1, 
+                               coolingRate = 0.3, slope0 = 0.05,
+                               plot=TRUE) {
   set.seed(1)
   OCN <- create_OCN(dimX, dimY, 
                     cellsize = cellsize, 
@@ -66,7 +66,7 @@ OCN_generate <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
   thrA <- as.data.table(
     OCNet::find_area_threshold_OCN(OCN=OCN, thrValues=seq(0.5,50,0.05))) %>%
     .[which.min(abs(nNodesRN-patches)), thrValues]
-
+  
   #thrA = 5*cellsize^2
   OCN <- aggregate_OCN(OCN, thrA = thrA)
   
@@ -78,8 +78,8 @@ OCN_generate <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
                       cex=1,
                       backgroundColor = NULL)
   }
-
-  graph <- OCN2graph(OCN)
+  
+  graph <- convert_OCN_to_igraph(OCN)
   
   return(graph)
 }
