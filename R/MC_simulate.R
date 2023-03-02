@@ -41,7 +41,7 @@
 #' @export
 #'
 simulate_MC <- function(
-  patches, species, dispersal = 0.01,
+  species, patches, dispersal = 0.01,
   plot = TRUE,
   torus = FALSE, kernel_exp = 0.1,
   env1Scale = 500, timesteps = 1200, burn_in = 800, 
@@ -51,14 +51,17 @@ simulate_MC <- function(
   extirp_prob = 0,
   landscape, disp_mat, env.df, env_optima, int_mat){
   
+
   #Get landscape structure (coordinate of patches)
   if (missing(landscape)){
     landscape <- landscape_generate(patches = patches, 
                                     plot = plot)
   } else {
-    landscape <- landscape_generate(patches = patches, 
-                                    xy = landscape, 
-                                    plot = plot)
+    if (inherits(landscape, 'igraph')) {
+      patches <- gorder(landscape)
+    } else if (inherits(landscape, 'data.frame')) {
+      patches <- nrow(landscape)
+    }
   }
   
   #Get dispersal matrix (defining the mean relative proportion of individuals 
@@ -218,6 +221,8 @@ simulate_MC <- function(
     setTxtProgressBar(pb, i)
   }
   close(pb)
+  
+  
   dynamics.df <- left_join(dynamics.df, env_traits.df)
   env.df$time_run <- env.df$time - burn_in
   

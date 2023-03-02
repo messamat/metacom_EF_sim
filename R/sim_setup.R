@@ -1,3 +1,4 @@
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ convert_OCN_to_igraph ~~~~~~~~~~~~~~~~~~~~~~####
 #' Converts an OCN object to an igraph object.
 #'
 #' This helper function converts an optimal channel network (OCN) created with
@@ -33,7 +34,7 @@ convert_OCN_to_igraph <- function(OCN) {
     .[, lapply(.SD, function(x) x*OCN$cellsize)] %>%
     setnames(c("X", "Y"))
 
-  #Create edge list from nodes upstream of edges 
+  #Create graph
   #(besides outlets which do not have downstream edges)
   graph <- data.table(from = 1:OCN$RN$nNodes,
                       to = OCN$RN$downNode,
@@ -45,6 +46,8 @@ convert_OCN_to_igraph <- function(OCN) {
   
   return(graph)
 }
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCNigraph ~~~~~~~~~~~~~~~~~~~~~~~~####
 
 #' Generate OCN
 #' @author adapted from Claire Jacquet (OID: 10.1111/OIK.09372)
@@ -85,6 +88,7 @@ generate_OCNigraph <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
 }
 
 
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ landscape_generate ~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate landscape
 #'
 #' Generates a landscape for metacommunity simulations
@@ -129,7 +133,7 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 }
 
 
-
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ TODO: check dispersal matrix ~~~~~~~~~~~~~~~~####
 #Check dispersal matrix
 # disp_mat <- disp_mat
 # rownames(disp_mat) <- 1:nrow(disp_mat)
@@ -139,6 +143,23 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 #   stop ("disp_mat does not have a row and column for each patch in landscape")
 
 
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ TOCOMMENT: plot dispersal matrix ~~~~~~~~~~~~####
+plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
+  g <- as.data.frame(disp_mat) %>%
+    dplyr::mutate(to.patch = rownames(disp_mat)) %>%
+    tidyr::gather(key = from.patch, value = dispersal, -to.patch) %>%
+    dplyr::mutate(from.patch = as.numeric(as.character(from.patch)),
+                  to.patch = as.numeric(as.character(to.patch))) %>%
+    ggplot2::ggplot(ggplot2::aes(x = from.patch, y = to.patch, fill = dispersal))+
+    ggplot2::geom_tile()+
+    scale_fill_viridis_c()
+  
+  if (print) {print(g)}
+  
+  return(g)
+}
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ dispersal_matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Dispersal Matrix
 #'
 #' Generates dispersal matrix for metacommunity simulations
@@ -164,22 +185,6 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 #' @export
 #'
 #'
-
-plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
-  g <- as.data.frame(disp_mat) %>%
-    dplyr::mutate(to.patch = rownames(disp_mat)) %>%
-    tidyr::gather(key = from.patch, value = dispersal, -to.patch) %>%
-    dplyr::mutate(from.patch = as.numeric(as.character(from.patch)),
-                  to.patch = as.numeric(as.character(to.patch))) %>%
-    ggplot2::ggplot(ggplot2::aes(x = from.patch, y = to.patch, fill = dispersal))+
-    ggplot2::geom_tile()+
-    scale_fill_viridis_c()
-  
-  if (print) {print(g)}
-  
-  return(g)
-}
-
 dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, 
                              kernel_exp = 0.1, plot = TRUE){
   
@@ -213,6 +218,8 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
   return (disp_mat)
 }
 
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ env_generate ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Environment
 #'
 #' Generates density independent environmental conditions for metacommunity simulations
@@ -240,7 +247,14 @@ env_generate <- function(landscape, env.df, env1Scale = 2,
   if (missing(env.df)){
     repeat {
       env.df <- data.frame()
-      for(i in 1:nrow(landscape)){
+      
+      if (inherits(landscape, 'igraph')) {
+        patches <- gorder(landscape)
+      } else if (inherits(landscape, 'data.frame')) {
+        patches <- nrow(landscape)
+      }
+      
+      for(i in 1:patches){
         #Create two time series w the phase partnered algorithm (Vasseur (2007):
         # specific autocorrelation gamma,
         # cross-correlation rho #default = 1,
@@ -279,6 +293,8 @@ env_generate <- function(landscape, env.df, env1Scale = 2,
   print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
 }
 
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ env_traits ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Species Env. Traits
 #'
 #' Generates species specific traits for density independent environmental responses
@@ -332,6 +348,8 @@ env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1,
   return(env_traits.df)
 }
 
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ species_int_mat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Species Interaction Matrix
 #'
 #' Generates density dependent matrix of per capita competition
