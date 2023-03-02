@@ -20,7 +20,15 @@ list(
   
   tar_target(
     basic_sim,
-    simulate_MC(species = 2,
+    simulate_MC(species = 1,
+                timesteps = 1200, 
+                burn_in = 800,
+                initialization = 200,
+                intra = 1,
+                max_r = 5,
+                min_inter = 0, 
+                max_inter = 0.5,
+                dispersal = 0,
                 landscape = OCNigraph)
   )
 )

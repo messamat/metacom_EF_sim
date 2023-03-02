@@ -149,7 +149,7 @@ simulate_MC <- function(
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Run model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   for(i in 1:(initialization + burn_in + timesteps)){ 
-    
+
     if(i <= initialization){ #for initialization steps
       if(i %in% seq(10,100, by = 10)){ #Every 10 time steps
         N <- N + matrix(rpois(n = species*patches, lambda = 0.5), nrow = patches, ncol = species) #Recruitment event with lambda = 0.5
@@ -175,37 +175,41 @@ simulate_MC <- function(
     N_hat <- matrix(rpois(n = species*patches, lambda = N_hat), 
                     ncol = species, nrow = patches)
     
-    #~~~~~~~~~ Compute emigration matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    #(equal probability of dispersal for each species)
-    E <- matrix(rbinom(n = patches * species, 
-                       size = N_hat, 
-                       prob = rep(dispersal, each = patches)), 
-                nrow = patches,
-                ncol = species)
-    
-    #~~~~~~~~~ Compute immigration matrix (with equation 4) ~~~~~~~~~~~~~~~~~~~~
-    dispSP <- colSums(E) #Total number of emigrating individuals for each species
-    
-    I_hat_raw <- disp_mat%*%E 
-    #Probability that a dispersing individual of each species immigrates to each site
-    I_hat <- t(t(I_hat_raw)/colSums(I_hat_raw)) 
-    I_hat[is.nan(I_hat)] <- 1
-    
-    #For each species
-    I <- sapply(1:species, function(x) {
-      if(dispSP[x]>0){
-        table(factor(sample(x = patches, 
-                            size = dispSP[x], 
-                            replace = TRUE, 
-                            prob = I_hat[,x]), 
-                     levels = 1:patches))
-      } else {
-        rep(0, patches)}
-    })
-    
-    #Compute final number of individuals per species per patch (eq. 1)
-    N <- N_hat - E + I
-    
+    if (dispersal > 0) {
+      #~~~~~~~~~ Compute emigration matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      #(equal probability of dispersal for each species)
+      E <- matrix(rbinom(n = patches * species, 
+                         size = N_hat, 
+                         prob = rep(dispersal, each = patches)), 
+                  nrow = patches,
+                  ncol = species)
+      
+      #~~~~~~~~~ Compute immigration matrix (with equation 4) ~~~~~~~~~~~~~~~~~~~~
+      dispSP <- colSums(E) #Total number of emigrating individuals for each species
+      
+      I_hat_raw <- disp_mat%*%E 
+      #Probability that a dispersing individual of each species immigrates to each site
+      I_hat <- t(t(I_hat_raw)/colSums(I_hat_raw)) 
+      I_hat[is.nan(I_hat)] <- 1
+      
+      #For each species
+      I <- sapply(1:species, function(x) {
+        if(dispSP[x]>0){
+          table(factor(sample(x = patches, 
+                              size = dispSP[x], 
+                              replace = TRUE, 
+                              prob = I_hat[,x]), 
+                       levels = 1:patches))
+        } else {
+          rep(0, patches)}
+      })
+      
+      #Compute final number of individuals per species per patch (eq. 1)
+      N <- N_hat - E + I
+    } else {
+      N <- N_hat
+    }
+
     #Implement stochastic extirpation 
     #(in the case of a competition-colonisation trade-off set-up 
     #see Simulation runs (4), p1321)
@@ -253,5 +257,7 @@ simulate_MC <- function(
     print(g)
   }
   
-  return(list(dynamics.df = dynamics.df, landscape = landscape, env.df = env.df, env_traits.df = env_traits.df, disp_mat = disp_mat, int_mat = int_mat))
+  return(list(dynamics.df = dynamics.df, landscape = landscape, 
+              env.df = env.df,env_traits.df = env_traits.df, 
+              disp_mat = disp_mat, int_mat = int_mat))
 }
