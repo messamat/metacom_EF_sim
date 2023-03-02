@@ -17,16 +17,21 @@
 #'
 landscape_generate <- function(patches = 100, xy, plot = TRUE) {
   if (missing(xy)){
-
+    
     if(patches > 10000) stop("Maximum number of patches is 10000.")
-    positions_linear = sample(0:9999, patches)
-    landscape = data.frame(x = floor(positions_linear / 100)+1, y = (positions_linear %% 100) + 1)
-
+    #Generate random coordinates
+    positions_linear = sample(0:9999, patches) #Sample without replacement
+    landscape = data.frame(x = floor(positions_linear / 100)+1, 
+                           y = (positions_linear %% 100) + 1)
+    
+    #Cluster landscape based on euclidean distance among sites
     clusters <- hclust(dist(landscape),method = "ward.D2")
-
+    
+    #Re-order patches based on nearest neighbors
     landscape <- landscape[clusters$order, ]
+    #re-assign rowname ID
     rownames(landscape) <- 1:patches
-
+    
   } else {
     landscape <- xy
   }
@@ -60,28 +65,35 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 #'
 #' @export
 #'
-dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, kernel_exp = 0.1, plot = TRUE){
+dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, 
+                             kernel_exp = 0.1, plot = TRUE){
   if (missing(disp_mat)){
+    #Compute distance among sites
     if(torus == TRUE){
       dist_mat <- as.matrix(som.nn::dist.torus(coors = landscape))
     } else {
       dist_mat <- as.matrix(dist(landscape))
     }
-
-    disp_mat <- exp(-kernel_exp * dist_mat)
+    
+    disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
     diag(disp_mat) <- 0
-    disp_mat <- apply(disp_mat, 1, function(x) x / sum(x))
+    disp_mat <- apply(disp_mat, 1, function(x) x / sum(x)) #Standard into relative probability
   } else {
     disp_mat <- disp_mat
     rownames(disp_mat) <- 1:nrow(disp_mat)
     colnames(disp_mat) <- 1:ncol(disp_mat)
     if (is.matrix(disp_mat) == FALSE) stop ("disp_mat is not a matrix")
-    if (nrow(disp_mat) != nrow(landscape) | ncol(disp_mat) != nrow(landscape)) stop ("disp_mat does not have a row and column for each patch in landscape")
+    if (nrow(disp_mat) != nrow(landscape) | ncol(disp_mat) != nrow(landscape)) 
+      stop ("disp_mat does not have a row and column for each patch in landscape")
   }
-
-  if (sum(colSums(disp_mat) > 1.001) > 0) warning ("dispersal from a patch to all others exceeds 100%. Make sure the rowSums(disp_mat) <= 1")
-  if (sum(colSums(disp_mat) < 0.999) > 0) warning ("dispersal from a patch to all others is less than 100%. Some dispersing individuals will be lost from the metacommunity")
-
+  
+  if (sum(colSums(disp_mat) > 1.001) > 0)
+    warning ("dispersal from a patch to all others exceeds 100%. 
+    Make sure the rowSums(disp_mat) <= 1")
+  if (sum(colSums(disp_mat) < 0.999) > 0) 
+    warning ("dispersal from a patch to all others is less than 100%. 
+             Some dispersing individuals will be lost from the metacommunity")
+  
   if (plot == TRUE){
     g <- as.data.frame(disp_mat) %>%
       dplyr::mutate(to.patch = rownames(disp_mat)) %>%
@@ -91,10 +103,10 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, kernel_exp = 0.1
       ggplot2::ggplot(ggplot2::aes(x = from.patch, y = to.patch, fill = dispersal))+
       ggplot2::geom_tile()+
       scale_fill_viridis_c()
-
+    
     print(g)
   }
-
+  
   return (disp_mat)
 }
 
@@ -120,28 +132,46 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, kernel_exp = 0.1
 #'
 #' @export
 #'
-env_generate <- function(landscape, env.df, env1Scale = 2, timesteps = 1000, plot = TRUE){
+env_generate <- function(landscape, env.df, env1Scale = 2, 
+                         timesteps = 1000, plot = TRUE){
   if (missing(env.df)){
     repeat {
       env.df <- data.frame()
       for(i in 1:nrow(landscape)){
-        env1 = phase.partnered(n = timesteps, gamma = env1Scale, mu = 0.5, sigma = 0.25)$timeseries[,1]
-        env.df <- rbind(env.df, data.frame(env1 = vegan::decostand(env1,method = "range"), patch = i, time = 1:timesteps))
+        #Create two time series w the phase partnered algorithm (Vasseur (2007):
+        # specific autocorrelation gamma,
+        # cross-correlation rho #default = 1,
+        # mean mu
+        # standard deviation sigma 
+        env1 = phase.partnered(n = timesteps, 
+                               gamma = env1Scale, 
+                               mu = 0.5, 
+                               sigma = 0.25)$timeseries[,1]
+        
+        #Standardize all values to fall between 0 and 1
+        env.df <- rbind(env.df, 
+                        data.frame(env1 = vegan::decostand(env1,method = "range"),
+                                   patch = i, 
+                                   time = 1:timesteps))
       }
+      #Get values at first step for burn-in
       env.initial <- env.df[env.df$time == 1,]
+      
+      #Make sure there's a sufficient range of env values for burn-in
       if((max(env.initial$env1)-min(env.initial$env1)) > 0.6) {break}
     }
   } else {
-    if(all.equal(names(env.df), c("env1", "patch", "time")) != TRUE) stop("env.df must be a dataframe with columns: env1, patch, time")
+    if(all.equal(names(env.df), c("env1", "patch", "time")) != TRUE) 
+      stop("env.df must be a dataframe with columns: env1, patch, time")
   }
-
+  
   if(plot == TRUE){
     g<-ggplot2::ggplot(env.df, aes(x = time, y = env1, group = patch, color = factor(patch)))+
       ggplot2::geom_line()+
       scale_color_viridis_d(guide = "none")
     print(g)
   }
-
+  
   return(env.df)
   print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
 }
@@ -168,25 +198,33 @@ env_generate <- function(landscape, env.df, env1Scale = 2, timesteps = 1000, plo
 #'
 #' @export
 #'
-env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1, env_niche_breadth = 0.5, optima, plot = TRUE, optima_spacing = "random"){
+env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1, 
+                       env_niche_breadth = 0.5, optima, plot = TRUE, 
+                       optima_spacing = "random"){
+  
+  #Determine environmental optima for species
   if (missing(optima)){
-    if(optima_spacing == "even"){
+    if(optima_spacing == "even"){ #Linear increase in environmental optima
       optima <- seq(from = 0,to = 1,length = species)
     }
-    if(optima_spacing == "random"){
+    if(optima_spacing == "random"){ #Random assignment of environmental optima
       optima <- runif(n = species, min = min_env, max = max_env)
     }
   } else {
     if(length(optima)!=species) stop("optima is not a vector of length species")
     if(class(optima)!="numeric") stop("optima is not a numeric vector")
   }
-  env_traits.df <- data.frame(species = 1:species, optima = optima, env_niche_breadth = env_niche_breadth, max_r = max_r)
-
+  
+  env_traits.df <- data.frame(species = 1:species, 
+                              optima = optima, 
+                              env_niche_breadth = env_niche_breadth,
+                              max_r = max_r)
+  
   if(plot == TRUE){
     matplot(sapply(X = 1:species, FUN = function(x) {
       exp(-((env_traits.df$optima[x]-seq(min_env, max_env, length = 30))/(2*env_traits.df$env_niche_breadth[x]))^2)
     })*rep(max_r,each = 30), type = "l", lty = 1, ylab = "r", xlab = "environment", ylim = c(0,max(max_r)))
-
+    
   }
   return(env_traits.df)
 }
@@ -215,17 +253,34 @@ env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1, env_niche_b
 #'
 #' @export
 #'
-species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5, int_mat, comp_scaler = 0.05, plot = TRUE){
-  if (missing(int_mat)){
-    int_mat <- matrix(runif(n = species*species, min = min_inter, max = max_inter), nrow = species, ncol = species)
-    diag(int_mat) <- intra
-    int_mat <- int_mat * comp_scaler
-  } else {
-    if (is.matrix(int_mat) == FALSE) stop("int_mat must be a matrix")
-    if (sum(dim(int_mat) != c(species,species))>0) stop("int_mat must be a matrix with a row and column for each species")
-    if (is.numeric(int_mat) == FALSE) stop("int_mat must be numeric")
-  }
+#'
 
+#Comment Mathis: the default parameters generate a mixed competitive structure,
+#whereby alpha_ijvalues of αij are drawn from a uniform 
+#distribution in the range [0, 1.5], resulting in a combination of 
+#species pairs for which competition is stabilising, destabilising, 
+#or where one of the two is competitively dominant
+species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5, 
+                            int_mat, comp_scaler = 0.05, plot = TRUE){
+  if (missing(int_mat)){
+    int_mat <- matrix(runif(n = species*species, 
+                            min = min_inter,
+                            max = max_inter), 
+                      nrow = species, ncol = species)
+    diag(int_mat) <- intra
+    
+    #scale all competition coefficients by multiplying them by 0.05, 
+    #to allow for higher equilibrium abundances.
+    int_mat <- int_mat * comp_scaler 
+  } else {
+    if (is.matrix(int_mat) == FALSE)
+      stop("int_mat must be a matrix")
+    if (sum(dim(int_mat) != c(species,species))>0)
+      stop("int_mat must be a matrix with a row and column for each species")
+    if (is.numeric(int_mat) == FALSE)
+      stop("int_mat must be numeric")
+  }
+  
   if (plot == TRUE){
     colnames(int_mat)<- 1:species
     g <- as.data.frame(int_mat) %>%
@@ -236,7 +291,7 @@ species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5, 
       ggplot2::ggplot(ggplot2::aes(x = i, y = j, fill = competition))+
       ggplot2::geom_tile()+
       scale_fill_viridis_c(option = "E")
-
+    
     print(g)
   }
   return(int_mat)

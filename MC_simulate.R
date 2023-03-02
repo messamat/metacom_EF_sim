@@ -40,99 +40,213 @@
 #'
 #' @export
 #'
-simulate_MC <- function(patches, species, dispersal = 0.01,
-                        plot = TRUE,
-                        torus = FALSE, kernel_exp = 0.1,
-                        env1Scale = 500, timesteps = 1200, burn_in = 800, initialization = 200,
-                        max_r = 5, min_env = 0, max_env = 1, env_niche_breadth = 0.5, optima_spacing = "random",
-                        intra = 1, min_inter = 0, max_inter = 1, comp_scaler = 0.05,
-                        extirp_prob = 0,
-                        landscape, disp_mat, env.df, env_optima, int_mat){
+simulate_MC <- function(
+  patches, species, dispersal = 0.01,
+  plot = TRUE,
+  torus = FALSE, kernel_exp = 0.1,
+  env1Scale = 500, timesteps = 1200, burn_in = 800, 
+  initialization = 200, max_r = 5,
+  min_env = 0, max_env = 1, env_niche_breadth = 0.5, optima_spacing = "random",
+  intra = 1, min_inter = 0, max_inter = 1, comp_scaler = 0.05,
+  extirp_prob = 0,
+  landscape, disp_mat, env.df, env_optima, int_mat){
+  
+  #Get landscape structure (coordinate of patches)
   if (missing(landscape)){
-    landscape <- landscape_generate(patches = patches, plot = plot)
+    landscape <- landscape_generate(patches = patches, 
+                                    plot = plot)
   } else {
-    landscape <- landscape_generate(patches = patches, xy = landscape, plot = plot)
+    landscape <- landscape_generate(patches = patches, 
+                                    xy = landscape, 
+                                    plot = plot)
   }
-
+  
+  #Get dispersal matrix (defining the mean relative proportion of individuals 
+  #that disperse from each site to every other site)
   if (missing(disp_mat)){
-    disp_mat <- dispersal_matrix(landscape = landscape,torus = torus, kernel_exp = kernel_exp, plot = plot)
+    disp_mat <- dispersal_matrix(landscape = landscape, 
+                                 torus = torus, 
+                                 kernel_exp = kernel_exp, 
+                                 plot = plot)
   } else {
-    disp_mat <- dispersal_matrix(landscape = landscape, disp_mat = disp_mat, torus = torus, kernel_exp = kernel_exp, plot = plot)
+    disp_mat <- dispersal_matrix(landscape = landscape, 
+                                 disp_mat = disp_mat, 
+                                 torus = torus,
+                                 kernel_exp = kernel_exp, 
+                                 plot = plot)
   }
-
+  
+  #Get environmental conditions
   if (missing(env.df)){
-    warning ("Environment is not spatially autocorrelated in the current version of the package and so results will differ from Thompson et al. 2020 Ecology Letters.")
-    env.df <- env_generate(landscape = landscape, env1Scale = env1Scale, timesteps = timesteps+burn_in, plot = plot)
+    warning ("Environment is not spatially autocorrelated in the current version 
+             of the package and so results will differ from Thompson et al. 2020 
+             Ecology Letters.")
+    env.df <- env_generate(landscape = landscape, 
+                           env1Scale = env1Scale, 
+                           timesteps = timesteps+burn_in, 
+                           plot = plot)
   } else {
-    env.df <- env_generate(landscape = landscape, env.df = env.df, env1Scale = env1Scale, timesteps = timesteps+burn_in, plot = plot)
+    env.df <- env_generate(landscape = landscape, 
+                           env.df = env.df, 
+                           env1Scale = env1Scale, 
+                           timesteps = timesteps+burn_in, 
+                           plot = plot)
   }
-
+  
+  #Get species traits matrix 
+  #(max growth rate + abiotic environment optima and niche breadth
   if (missing(env_optima)){
-    env_traits.df <- env_traits(species = species, max_r = max_r, min_env = min_env, max_env = max_env, env_niche_breadth = env_niche_breadth, optima_spacing = optima_spacing, plot = plot)
+    env_traits.df <- env_traits(species = species, 
+                                max_r = max_r, 
+                                min_env = min_env, 
+                                max_env = max_env, 
+                                env_niche_breadth = env_niche_breadth, 
+                                optima_spacing = optima_spacing, 
+                                plot = plot)
   } else {
-    env_traits.df <- env_traits(species = species, max_r = max_r, min_env = min_env, max_env = max_env, env_niche_breadth = env_niche_breadth, optima_spacing = optima_spacing, optima = env_optima, plot = plot)
+    env_traits.df <- env_traits(species = species, 
+                                max_r = max_r, 
+                                min_env = min_env, 
+                                max_env = max_env, 
+                                env_niche_breadth = env_niche_breadth, 
+                                optima_spacing = optima_spacing, 
+                                optima = env_optima, 
+                                plot = plot)
   }
-
+  
+  #Get species interaction matrix
   if (missing(int_mat)){
-    int_mat <- species_int_mat(species = species, intra = intra, min_inter = min_inter, max_inter = max_inter, comp_scaler = comp_scaler, plot = TRUE)
+    int_mat <- species_int_mat(species = species, 
+                               intra = intra, 
+                               min_inter = min_inter, 
+                               max_inter = max_inter, 
+                               comp_scaler = comp_scaler, 
+                               plot = TRUE)
   } else {
-    int_mat <- species_int_mat(species = species, int_mat = int_mat, intra = intra, min_inter = min_inter, max_inter = max_inter, comp_scaler = comp_scaler, plot = TRUE)
+    int_mat <- species_int_mat(species = species, 
+                               int_mat = int_mat, 
+                               intra = intra, 
+                               min_inter = min_inter, 
+                               max_inter = max_inter, 
+                               comp_scaler = comp_scaler, 
+                               plot = TRUE)
   }
-
+  
   dynamics.df <- data.frame()
-  N <- matrix(rpois(n = species*patches, lambda = 0.5), nrow = patches, ncol = species)
-  pb <- txtProgressBar(min = 0, max = initialization + burn_in + timesteps, style = 3)
-  for(i in 1:(initialization + burn_in + timesteps)){
-   if(i <= initialization){
-     if(i %in% seq(10,100, by = 10)){
-       N <- N + matrix(rpois(n = species*patches, lambda = 0.5), nrow = patches, ncol = species)
-     }
-     env <- env.df$env1[env.df$time == 1]
-   } else {
-     env <- env.df$env1[env.df$time == (i-initialization)]
-   }
-    r <- max_r*exp(-(t((env_traits.df$optima - matrix(rep(env, each = species), nrow = species, ncol = patches))/(2*env_traits.df$env_niche_breadth)))^2)
+  
+  #Seed all species in all patches based on Poisson distribution with lambda=0.5  
+  N <- matrix(rpois(n = species*patches, 
+                    lambda = 0.5), 
+              nrow = patches,
+              ncol = species)
+  
+  pb <- txtProgressBar(min = 0, 
+                       max = initialization + burn_in + timesteps, 
+                       style = 3)
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Run model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  for(i in 1:(initialization + burn_in + timesteps)){ 
+    
+    if(i <= initialization){ #for initialization steps
+      if(i %in% seq(10,100, by = 10)){ #Every 10 time steps
+        N <- N + matrix(rpois(n = species*patches, lambda = 0.5), nrow = patches, ncol = species) #Recruitment event with lambda = 0.5
+      }
+      env <- env.df$env1[env.df$time == 1] #Keep the same environmental conditions
+    } else {
+      env <- env.df$env1[env.df$time == (i-initialization)] #Set environmental conditions to the right time step
+    }
+    
+    #~~~~ Compute density-independent growth rate (eq. 3; p1319) ~~~~~~~~~~~~~~~
+    #Compute for each species the difference between its env optima and the env
+    #Each column is a species, each row is a patch
+    z_minus_envxt <- t((env_traits.df$optima - 
+                          matrix(rep(env, each = species),
+                                 nrow = species, ncol = patches)))
+    #Fill in eq. 3: density-independent growth for each species in all patches
+    r <- max_r * exp(-(z_minus_envxt/(2*env_traits.df$env_niche_breadth))^2)
+    
+    #~~~~ Compute the population size before accounting for dispersal ~~~~~~~~~~
+    #(eq. 2; p1319)
     N_hat <- N*r/(1+N%*%int_mat)
     N_hat[N_hat < 0] <- 0
-    N_hat <- matrix(rpois(n = species*patches, lambda = N_hat), ncol = species, nrow = patches)
-
-    E <- matrix(rbinom(n = patches * species, size = N_hat, prob = rep(dispersal, each = patches)), nrow = patches, ncol = species)
-    dispSP <- colSums(E)
-    I_hat_raw <- disp_mat%*%E
-    I_hat <- t(t(I_hat_raw)/colSums(I_hat_raw))
+    N_hat <- matrix(rpois(n = species*patches, lambda = N_hat), 
+                    ncol = species, nrow = patches)
+    
+    #~~~~~~~~~ Compute emigration matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #(equal probability of dispersal for each species)
+    E <- matrix(rbinom(n = patches * species, 
+                       size = N_hat, 
+                       prob = rep(dispersal, each = patches)), 
+                nrow = patches,
+                ncol = species)
+    
+    #~~~~~~~~~ Compute immigration matrix (with equation 4) ~~~~~~~~~~~~~~~~~~~~
+    dispSP <- colSums(E) #Total number of emigrating individuals for each species
+    
+    I_hat_raw <- disp_mat%*%E 
+    #Probability that a dispersing individual of each species immigrates to each site
+    I_hat <- t(t(I_hat_raw)/colSums(I_hat_raw)) 
     I_hat[is.nan(I_hat)] <- 1
+    
+    #For each species
     I <- sapply(1:species, function(x) {
       if(dispSP[x]>0){
-      table(factor(sample(x = patches, size = dispSP[x], replace = TRUE, prob = I_hat[,x]), levels = 1:patches))
-        } else {rep(0, patches)}
+        table(factor(sample(x = patches, 
+                            size = dispSP[x], 
+                            replace = TRUE, 
+                            prob = I_hat[,x]), 
+                     levels = 1:patches))
+      } else {
+        rep(0, patches)}
     })
-
+    
+    #Compute final number of individuals per species per patch (eq. 1)
     N <- N_hat - E + I
+    
+    #Implement stochastic extirpation 
+    #(in the case of a competition-colonisation trade-off set-up 
+    #see Simulation runs (4), p1321)
     N[rbinom(n = species * patches, size = 1, prob = extirp_prob)>0] <- 0
-
-    dynamics.df <- rbind(dynamics.df, data.frame(N = c(N), patch = 1:patches, species = rep(1:species, each = patches), env = env, time = i-initialization-burn_in))
+    
+    
+    dynamics.df <- rbind(dynamics.df, 
+                         data.frame(N = c(N), 
+                                    patch = 1:patches, 
+                                    species = rep(1:species, each = patches),
+                                    env = env, 
+                                    time = i-initialization-burn_in))
     setTxtProgressBar(pb, i)
   }
   close(pb)
   dynamics.df <- left_join(dynamics.df, env_traits.df)
   env.df$time_run <- env.df$time - burn_in
-
-  env.df_init <- data.frame(env1 = env.df$env1[env.df$time == 1], patch = 1:patches, time = NA, time_run = rep(seq(-(burn_in + initialization), -burn_in, by = 1), each = patches))
+  
+  env.df_init <- data.frame(env1 = env.df$env1[env.df$time == 1], 
+                            patch = 1:patches, 
+                            time = NA, 
+                            time_run = rep(seq(-(burn_in + initialization), 
+                                               -burn_in), 
+                                           each = patches))
   env.df <- rbind(env.df_init,env.df)
-
+  
   if(plot == TRUE){
-    sample_patches <- sample(1:patches, size = min(c(patches,6)), replace = FALSE)
+    sample_patches <- sample(1:patches, 
+                             size = min(c(patches,6)), 
+                             replace = FALSE)
     g <- dynamics.df %>%
-      filter(time %in% seq(min(dynamics.df$time),max(dynamics.df$time), by =10)) %>%
+      filter(time %in% seq(min(dynamics.df$time),
+                           max(dynamics.df$time), 
+                           by =10)) %>%
       filter(patch %in% sample_patches) %>%
       ggplot(aes(x = time, y = N, group = species, color = optima))+
       geom_line()+
       facet_wrap(~patch)+
       scale_color_viridis_c()+
-      geom_path(data = filter(env.df, patch %in% sample_patches), aes(y = -5, x = time_run, color = env1, group = NULL), size = 3)
-
+      geom_path(data = filter(env.df, patch %in% sample_patches), 
+                aes(y = -5, x = time_run, color = env1, group = NULL), 
+                size = 3)
     print(g)
   }
-
+  
   return(list(dynamics.df = dynamics.df, landscape = landscape, env.df = env.df, env_traits.df = env_traits.df, disp_mat = disp_mat, int_mat = int_mat))
 }
