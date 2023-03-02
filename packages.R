@@ -1,0 +1,5 @@
+library(som.nn)
+library(magrittr)
+library(synchrony)
+library(ggplot2)
+library(dplyr)
