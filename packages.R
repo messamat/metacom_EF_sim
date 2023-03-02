@@ -1,5 +1,6 @@
 library(dplyr)
 library(ggplot2)
+library(igraph)
 library(magrittr)
 library(OCNet)
 library(som.nn)

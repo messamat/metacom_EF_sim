@@ -1,3 +1,51 @@
+#' Converts an OCN object to an igraph object.
+#'
+#' This helper function converts an optimal channel network (OCN) created with
+#' the R package OCNet to an igraph object, ready to use with the Cantal model.
+#'
+#' @param OCN an optimal channel network (OCN) created with the R package OCNet.
+#'
+#' @importFrom igraph graph_from_adjacency_matrix
+#' @importFrom igraph set_vertex_attr
+#' 
+#' #' @author Adapted from Claire Jacquet
+#' 
+#' @return a igraph object.
+#'
+#' @examples
+#' library(OCNet)
+#' set.seed(1)
+#' dimX = 15
+#' dimY = 15
+#' cellsize = 500
+#' thrA = 5*cellsize^2
+#' OCN <- create_OCN(dimX, dimY, cellsize = cellsize)
+#' OCN <- landscape_OCN(OCN)
+#' OCN <- aggregate_OCN(OCN, thrA = thrA)
+#' graph <- OCN2graph(OCN)
+#'
+#' @export
+OCN2graph <- function(OCN) {
+  # Get geographic position
+  nodes_coords <- expand.grid(c(1:OCN$dimX), 
+                              c(1:OCN$dimY))[which(OCN$FD$toRN!=0),] %>%
+    data.table %>%
+    .[, lapply(.SD, function(x) x*OCN$cellsize)] %>%
+    setnames(c("X", "Y"))
+
+  #Create edge list from nodes upstream of edges 
+  #(besides outlets which do not have downstream edges)
+  graph <- data.table(from = 1:OCN$RN$nNodes,
+                      to = OCN$RN$downNode,
+                      weight = OCN$RN$leng,
+                      DA = OCN$RN$A) %>%
+    cbind(nodes_coords) %>%
+    .[to != 0,] %>% #remove outlet
+    graph_from_data_frame
+  
+  return(graph)
+}
+
 #' Generate OCN
 #' @author adapted from Claire Jacquet (OID: 10.1111/OIK.09372)
 #' 
@@ -14,8 +62,9 @@ OCN_generate <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
                     coolingRate = coolingRate)
   OCN <- landscape_OCN(OCN, slope0 = slope0)
   
+  #Determine the threshold area that generates the number of patches closest to "patches" argument
   thrA <- as.data.table(
-    OCNet::find_area_threshold_OCN(OCN=OCN, thrValues=seq(0.5,3,0.05))) %>%
+    OCNet::find_area_threshold_OCN(OCN=OCN, thrValues=seq(0.5,50,0.05))) %>%
     .[which.min(abs(nNodesRN-patches)), thrValues]
 
   #thrA = 5*cellsize^2
@@ -30,7 +79,7 @@ OCN_generate <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
                       backgroundColor = NULL)
   }
 
-  graph <- OCNet::OCN_to_igraph(OCN, level='RN')
+  graph <- OCN2graph(OCN)
   
   return(graph)
 }
@@ -81,6 +130,15 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 
 
 
+#Check dispersal matrix
+# disp_mat <- disp_mat
+# rownames(disp_mat) <- 1:nrow(disp_mat)
+# colnames(disp_mat) <- 1:ncol(disp_mat)
+# if (is.matrix(disp_mat) == FALSE) stop ("disp_mat is not a matrix")
+# if (nrow(disp_mat) != nrow(landscape) | ncol(disp_mat) != nrow(landscape)) 
+#   stop ("disp_mat does not have a row and column for each patch in landscape")
+
+
 #' Generate Dispersal Matrix
 #'
 #' Generates dispersal matrix for metacommunity simulations
@@ -105,55 +163,53 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 #'
 #' @export
 #'
+#'
+
+plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
+  g <- as.data.frame(disp_mat) %>%
+    dplyr::mutate(to.patch = rownames(disp_mat)) %>%
+    tidyr::gather(key = from.patch, value = dispersal, -to.patch) %>%
+    dplyr::mutate(from.patch = as.numeric(as.character(from.patch)),
+                  to.patch = as.numeric(as.character(to.patch))) %>%
+    ggplot2::ggplot(ggplot2::aes(x = from.patch, y = to.patch, fill = dispersal))+
+    ggplot2::geom_tile()+
+    scale_fill_viridis_c()
+  
+  if (print) {print(g)}
+  
+  return(g)
+}
+
 dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, 
                              kernel_exp = 0.1, plot = TRUE){
   
   if (inherits(landscape, 'igraph')) {
-    
-    
-    
-    
+    dist_mat <- igraph::distances(landscape)
   } else {
-    if (missing(disp_mat)){
-      #Compute distance among sites
-      if(torus == TRUE){
-        dist_mat <- as.matrix(som.nn::dist.torus(coors = landscape))
-      } else {
-        dist_mat <- as.matrix(dist(landscape))
-      }
-      
-      disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
-      diag(disp_mat) <- 0
-      disp_mat <- apply(disp_mat, 1, function(x) x / sum(x)) #Standard into relative probability
+    #Compute distance among sites
+    if(torus == TRUE){
+      dist_mat <- as.matrix(som.nn::dist.torus(coors = landscape))
     } else {
-      disp_mat <- disp_mat
-      rownames(disp_mat) <- 1:nrow(disp_mat)
-      colnames(disp_mat) <- 1:ncol(disp_mat)
-      if (is.matrix(disp_mat) == FALSE) stop ("disp_mat is not a matrix")
-      if (nrow(disp_mat) != nrow(landscape) | ncol(disp_mat) != nrow(landscape)) 
-        stop ("disp_mat does not have a row and column for each patch in landscape")
-    }
-    
-    if (sum(colSums(disp_mat) > 1.001) > 0)
-      warning ("dispersal from a patch to all others exceeds 100%. 
-    Make sure the rowSums(disp_mat) <= 1")
-    if (sum(colSums(disp_mat) < 0.999) > 0) 
-      warning ("dispersal from a patch to all others is less than 100%. 
-             Some dispersing individuals will be lost from the metacommunity")
-    
-    if (plot == TRUE){
-      g <- as.data.frame(disp_mat) %>%
-        dplyr::mutate(to.patch = rownames(disp_mat)) %>%
-        tidyr::gather(key = from.patch, value = dispersal, -to.patch) %>%
-        dplyr::mutate(from.patch = as.numeric(as.character(from.patch)),
-                      to.patch = as.numeric(as.character(to.patch))) %>%
-        ggplot2::ggplot(ggplot2::aes(x = from.patch, y = to.patch, fill = dispersal))+
-        ggplot2::geom_tile()+
-        scale_fill_viridis_c()
-      
-      print(g)
+      dist_mat <- as.matrix(dist(landscape))
     }
   }
+  
+  disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
+  diag(disp_mat) <- 0
+  disp_mat <- apply(disp_mat, 1, function(x) x / sum(x)) #Standard into relative probability
+  
+  
+  if (sum(colSums(disp_mat) > 1.001) > 0)
+    warning ("dispersal from a patch to all others exceeds 100%. 
+  Make sure the rowSums(disp_mat) <= 1")
+  if (sum(colSums(disp_mat) < 0.999) > 0) 
+    warning ("dispersal from a patch to all others is less than 100%. 
+           Some dispersing individuals will be lost from the metacommunity")
+  
+  if (plot == TRUE){
+    plot_dispersal_matrix(disp_mat) 
+  }
+  
   return (disp_mat)
 }
 
