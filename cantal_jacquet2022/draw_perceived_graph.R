@@ -41,18 +41,33 @@ library(raster)
 #' @export
 draw_perceived_graph <- function(OCN,dm,d_max,vertex.size=5,vertex.color="#309BCD",vertex.label=NA){
   if(dm=="drifting") {
-    graph = igraph::graph_from_adjacency_matrix(as.matrix(OCN$RN$W),mode="undirected") # Flow-directed distances between patches
+    graph = igraph::graph_from_adjacency_matrix(
+      as.matrix(OCN$RN$W),
+      mode="undirected") # Flow-directed distances between patches
   }
   if(dm=="swimming") {
-    graph = igraph::graph_from_adjacency_matrix((as.matrix(OCN$RN$W)+t(as.matrix(OCN$RN$W))),mode="undirected") # Watercourse distances between patches
+    graph = igraph::graph_from_adjacency_matrix(
+      (as.matrix(OCN$RN$W) + t(as.matrix(OCN$RN$W))),
+      mode="undirected") # Watercourse distances between patches
   }
   if(dm=="flying") {
-    ED <- raster::pointDistance(expand.grid(c(1:OCN$dimX),c(1:OCN$dimY)),lonlat=F) # Euclidian overland distances between patches of a dimX*dimY habitat matrix
-    ED_OCN <- ED[which(OCN$FD$toRN!=0),which(OCN$FD$toRN!=0)]*OCN$cellsize # Euclidian overland distances of the OCN, multiplied by OCN cellsize
+    ED <- raster::pointDistance(expand.grid(c(1:OCN$dimX),
+                                            c(1:OCN$dimY)),
+                                lonlat=F) # Euclidian overland distances between patches of a dimX*dimY habitat matrix
+    ED_OCN <- ED[which(OCN$FD$toRN!=0),
+                 which(OCN$FD$toRN!=0)]*OCN$cellsize # Euclidian overland distances of the OCN, multiplied by OCN cellsize
     diag(ED_OCN)=0
     ED_OCN[which(ED_OCN>(d_max))]=NaN # Dispersal distance determines which nodes are connected
+    
     graph=igraph::graph_from_adjacency_matrix(ED_OCN,mode="undirected")
-    graph=igraph::simplify(graph, remove.multiple = TRUE, remove.loops = TRUE, edge.attr.comb = igraph_opt("edge.attr.comb"))
+    graph=igraph::simplify(graph, remove.multiple = TRUE, remove.loops = TRUE, 
+                           edge.attr.comb = igraph_opt("edge.attr.comb"))
   }
-  igraph::plot.igraph(graph, layout = matrix(c(OCN$RN$X,OCN$RN$Y), ncol = 2, nrow = OCN$RN$nNodes),vertex.size=vertex.size,vertex.color=vertex.color,vertex.label=NA)
+  igraph::plot.igraph(graph, 
+                      layout = matrix(c(OCN$RN$X,OCN$RN$Y), 
+                                     ncol = 2, 
+                                     nrow = OCN$RN$nNodes),
+                      vertex.size = vertex.size,
+                      vertex.color = vertex.color,
+                      vertex.label=NA)
 }

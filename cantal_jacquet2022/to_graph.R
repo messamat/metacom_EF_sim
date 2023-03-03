@@ -10,6 +10,9 @@ library(sf)
 #'
 #' @importFrom igraph graph_from_adjacency_matrix
 #' @importFrom igraph set_vertex_attr
+#' 
+#' #' @author Claire Jacquet
+#' 
 #' @return a igraph object.
 #'
 #' @examples
@@ -28,7 +31,8 @@ library(sf)
 OCN2graph <- function(OCN) {
   graph = graph_from_adjacency_matrix(as.matrix(OCN$RN$W))
   # Put geographic position
-  nodes_coords = expand.grid(c(1:OCN$dimX),c(1:OCN$dimY))[which(OCN$FD$toRN!=0),] # selon code Claire
+  nodes_coords = expand.grid(c(1:OCN$dimX),
+                             c(1:OCN$dimY))[which(OCN$FD$toRN!=0),] # selon code Claire
   graph = set_vertex_attr(graph, "X", value = nodes_coords[,1]*OCN$cellsize)
   graph = set_vertex_attr(graph, "Y", value = nodes_coords[,2]*OCN$cellsize)
   # Put width

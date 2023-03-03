@@ -152,7 +152,8 @@ simulate_MC <- function(
 
     if(i <= initialization){ #for initialization steps
       if(i %in% seq(10,100, by = 10)){ #Every 10 time steps
-        N <- N + matrix(rpois(n = species*patches, lambda = 0.5), nrow = patches, ncol = species) #Recruitment event with lambda = 0.5
+        N <- N + matrix(rpois(n = species*patches, lambda = 0.5), 
+                        nrow = patches, ncol = species) #Recruitment event with lambda = 0.5
       }
       env <- env.df$env1[env.df$time == 1] #Keep the same environmental conditions
     } else {
