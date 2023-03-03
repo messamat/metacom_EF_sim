@@ -27,22 +27,19 @@
 #'
 #' @export
 convert_OCN_to_igraph <- function(OCN) {
-  # Get geographic position
-  nodes_coords <- expand.grid(c(1:OCN$dimX), 
-                              c(1:OCN$dimY))[which(OCN$FD$toRN!=0),] %>%
-    data.table %>%
-    .[, lapply(.SD, function(x) x*OCN$cellsize)] %>%
-    setnames(c("X", "Y"))
-
   #Create graph
   #(besides outlets which do not have downstream edges)
   graph <- data.table(from = 1:OCN$RN$nNodes,
                       to = OCN$RN$downNode,
                       weight = OCN$RN$leng,
                       DA = OCN$RN$A) %>%
-    cbind(nodes_coords) %>%
     .[to != 0,] %>% #remove outlet
-    graph_from_data_frame
+    .[order(to),] %>%
+    graph_from_data_frame %>% 
+    set.vertex.attribute(name ='x', 
+                         value = OCN$RN$X) %>%
+    set.vertex.attribute(name ='y', 
+                         value = OCN$RN$Y)
   
   return(graph)
 }
@@ -220,6 +217,14 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
 
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ env_generate ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+# ###############################################################################Separate checking of env_df
+# } else {
+#   if(all.equal(names(env_df), c("env1", "patch", "time")) != TRUE) 
+#     stop("env_df must be a dataframe with columns: env1, patch, time")
+# }
+# ###############################################################################Separate checking of env_df
+
+
 #' Generate Environment
 #'
 #' Generates density independent environmental conditions for metacommunity simulations
@@ -242,19 +247,51 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
 #'
 #' @export
 #'
-env_generate <- function(landscape, env_df, env1Scale = 2, 
-                         timesteps = 1000, plot = TRUE){
-  if (missing(env_df)){
-    repeat {
-      env_df <- data.frame()
+env_generate <- function(landscape, env1Scale = 500, 
+                         timesteps = 1000, spatial_autocor = FALSE, plot = TRUE){
+  
+  if (inherits(landscape, 'igraph')) {
+    patches <- gorder(landscape)
+    landscape <- as.data.table(get.vertex.attribute(graph))
+  } else if (inherits(landscape, 'data.frame')) {
+    patches <- nrow(landscape)
+  }
+  
+  repeat {
+    if (spatial_autocor) {
+      #Generate a stationary isotropic covariance model whose corresponding
+      #covariance function only depends on the distance r ≥ 0 between two points
+      model <- RMexp(var=0.5, scale=env1Scale) + # with variance 4 and scale 10
+        RMnugget(var=0) + # nugget
+        RMtrend(mean=0.05) # and mean
       
-      if (inherits(landscape, 'igraph')) {
-        patches <- gorder(landscape)
-      } else if (inherits(landscape, 'data.frame')) {
-        patches <- nrow(landscape)
-      }
+      #Simulate data after burn_in period based on model for whole landscape
+      RF <- RFsimulate(model = model,
+                       x = landscape$x*10, 
+                       y = landscape$y*10, 
+                       T = 1:timesteps)
       
-      for(i in 1:patches){
+      #Standardize all values to fall between 0 and 1
+      env_df <- data.frame(
+        patch = landscape$name,
+        env1 = decostand(RF$variable1,
+                         method = "range"), 
+        x= landscape$x, 
+        y = landscape$y, 
+        time = rep(1:timesteps,
+                   each = patches))
+      
+      #Convert raw environmental values to probabilities (y) 
+      #from the empirical cumulative distribution function 
+      #(to fully fill 0-1 space?)
+      ecum <- ecdf(env.df$env1)
+      env.cum <- ecum(env.df$env1)
+      env.df$env1 <- env.cum
+      
+    } else { #i.e. if spatial_autocor == FALSE
+      print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
+      
+      env_df <- lapply(1:patches, function(i) {
         #Create two time series w the phase partnered algorithm (Vasseur (2007):
         # specific autocorrelation gamma,
         # cross-correlation rho #default = 1,
@@ -266,20 +303,17 @@ env_generate <- function(landscape, env_df, env1Scale = 2,
                                sigma = 0.25)$timeseries[,1]
         
         #Standardize all values to fall between 0 and 1
-        env_df <- rbind(env_df, 
-                        data.frame(env1 = vegan::decostand(env1,method = "range"),
-                                   patch = i, 
-                                   time = 1:timesteps))
-      }
-      #Get values at first step for burn-in
-      env.initial <- env_df[env_df$time == 1,]
-      
-      #Make sure there's a sufficient range of env values for burn-in
-      if((max(env.initial$env1)-min(env.initial$env1)) > 0.6) {break}
+        env_df <- data.frame(env1 = vegan::decostand(env1,method = "range"),
+                             patch = i, 
+                             time = 1:timesteps)
+        return(env_df)
+      }) %>% rbindlist
     }
-  } else {
-    if(all.equal(names(env_df), c("env1", "patch", "time")) != TRUE) 
-      stop("env_df must be a dataframe with columns: env1, patch, time")
+    
+    #Get values at first step for burn-in
+    env.initial <- env_df[env_df$time == 1,]
+    #Make sure there's a sufficient range of env values for burn-in
+    if((max(env.initial$env1)-min(env.initial$env1)) > 0.6) {break}
   }
   
   if(plot == TRUE){
@@ -288,11 +322,8 @@ env_generate <- function(landscape, env_df, env1Scale = 2,
       scale_color_viridis_d(guide = "none")
     print(g)
   }
-  
   return(env_df)
-  print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
 }
-
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ env_traits ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Species Env. Traits
@@ -457,8 +488,8 @@ compare_predobs_env_traits <- function(MCsim, subn) {
   
   if (!missing(subn)) {
     dynamics_df_sim <- dynamics_df_sim[sample(dynamics_df_sim[!is.na(r_obs), .N],
-                                      subn,
-                                      replace=F),]
+                                              subn,
+                                              replace=F),]
   }
   
   
