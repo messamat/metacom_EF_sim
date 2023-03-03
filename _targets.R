@@ -31,6 +31,17 @@ list(
     )
   ),
   
+  tar_target(
+    env_df,
+    env_generate(
+      landscape = OCNigraph,
+      env1Scale = 500, 
+      timesteps = 2000, #Includes burn-in
+      spatial_autocor = TRUE, 
+      plot = TRUE
+    )
+  ),
+  
   tarchetypes::tar_map(
     values = tibble(
       in_dispersal = c(0, 0.01, 0.05)
@@ -38,7 +49,7 @@ list(
     
     tar_target(
       sim_sp1,
-      simulate_MC(timesteps = 1200, 
+      simulate_MC(#timesteps = 1200, 
                   burn_in = 800,
                   initialization = 200,
                   intra = 1,
@@ -46,6 +57,7 @@ list(
                   max_inter = 0.5,
                   dispersal = in_dispersal,
                   landscape = OCNigraph,
+                  env_df = env_df,
                   env_traits_df = env_traits_df,
                   )
     ),

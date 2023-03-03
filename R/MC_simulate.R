@@ -81,19 +81,17 @@ simulate_MC <- function(
   
   #Get environmental conditions
   if (missing(env_df)){
-    warning ("Environment is not spatially autocorrelated in the current version 
-             of the package and so results will differ from Thompson et al. 2020 
-             Ecology Letters.")
     env_df <- env_generate(landscape = landscape, 
                            env1Scale = env1Scale, 
                            timesteps = timesteps+burn_in, 
                            plot = plot)
   } else {
-    env_df <- env_generate(landscape = landscape, 
-                           env_df = env_df, 
-                           env1Scale = env1Scale, 
-                           timesteps = timesteps+burn_in, 
-                           plot = plot)
+    timesteps <- length(unique(env_df$time))- burn_in
+    # env_df <- env_generate(landscape = landscape, 
+    #                        env_df = env_df, 
+    #                        env1Scale = env1Scale, 
+    #                        timesteps = timesteps+burn_in, 
+    #                        plot = plot)
   }
   
   #Get species traits matrix 
