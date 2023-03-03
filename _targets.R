@@ -19,22 +19,40 @@ list(
   ),
   
   tar_target(
-    sim_sp1_0dis_randenv,
-    simulate_MC(species = 1,
-                timesteps = 1200, 
-                burn_in = 800,
-                initialization = 200,
-                intra = 1,
-                max_r = 5,
-                env_niche_breadth = 0.5,
-                min_inter = 0, 
-                max_inter = 0.5,
-                dispersal = 0,
-                landscape = OCNigraph)
+    env_traits_df,
+    env_traits(
+      species = 1,
+      max_r = 5,
+      min_env = 0,
+      max_env = 1,
+      env_niche_breadth = 0.5,
+      plot = F,
+      optima_spacing = 'random'
+    )
   ),
   
-  tar_target(
-    FER_sp1_0dis_randenv,
-    compare_predobs_env_traits(sim_sp1_0dis_randenv),
+  tarchetypes::tar_map(
+    values = tibble(
+      in_dispersal = c(0, 0.01, 0.05)
+    ),
+    
+    tar_target(
+      sim_sp1,
+      simulate_MC(timesteps = 1200, 
+                  burn_in = 800,
+                  initialization = 200,
+                  intra = 1,
+                  min_inter = 0, 
+                  max_inter = 0.5,
+                  dispersal = in_dispersal,
+                  landscape = OCNigraph,
+                  env_traits_df = env_traits_df,
+                  )
+    ),
+    
+    tar_target(
+      FER_sp1,
+      compare_predobs_env_traits(sim_sp1, subn=10000),
+    )
   )
 )
