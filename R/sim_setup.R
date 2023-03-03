@@ -421,7 +421,12 @@ species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5,
 ### 
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compare_predobs_env_traits ~~~~~~~~~~~~~~~~~~####
-compare_predobs_env_traits <- function(dynamics.df, env_traits.df, subn) {
+
+compare_predobs_env_traits <- function(MCsim, subn) {
+  
+  dynamics.df <- MCsim$dynamics.df
+  env_traits.df <- MCsim$env_traits.df
+  
   dynamics.df_sim <- setDT(dynamics.df)[time>=0,]
   
   dynamics.df_sim <- dynamics.df_sim[order(time),

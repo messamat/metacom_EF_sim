@@ -35,7 +35,6 @@ list(
   
   tar_target(
     FER_sp1_0dis_randenv,
-    compare_predobs_env_traits(dynamics.df = sim_sp1_0dis_randenv$dynamics.df,
-                               env_traits.df = sim_sp1_0dis_randenv$env_traits.df)
+    compare_predobs_env_traits(sim_sp1_0dis_randenv),
   )
 )
