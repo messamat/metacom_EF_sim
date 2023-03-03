@@ -417,3 +417,55 @@ species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5,
   }
   return(int_mat)
 }
+
+### 
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compare_predobs_env_traits ~~~~~~~~~~~~~~~~~~####
+compare_predobs_env_traits <- function(dynamics.df, env_traits.df, subn) {
+  dynamics.df_sim <- setDT(dynamics.df)[time>=0,]
+  
+  dynamics.df_sim <- dynamics.df_sim[order(time),
+                                     Nlag1 := shift(N, n=1, type='lag'),
+                                     by=.(species, patch)] %>%
+    .[Nlag1 > 0, r_obs := N/Nlag1] %>%
+    .[!is.na(r_obs)]
+  
+  min_env <- min(dynamics.df_sim$env)
+  max_env <- max(dynamics.df_sim$env)
+  
+  env_range <- data.table(env = seq(min_env, max_env, length = 30)) 
+  species <- length(unique(dynamics.df_sim$species))
+  
+  env_traits_curves <- 
+    cbind(
+      env_range,
+      lapply(X = 1:species, FUN = function(x) {
+        r <- env_traits.df$max_r*exp(-((env_traits.df$optima[x]-env_range$env)/
+                                         (2*env_traits.df$env_niche_breadth[x]))^2)
+        data.table(species=x,
+                   r)
+      }) %>%
+        rbindlist
+    )
+  
+  if (!missing(subn)) {
+    dynamics.df_sim <- dynamics.df_sim[sample(dynamics.df_sim[!is.na(r_obs), .N],
+                                      subn,
+                                      replace=F),]
+  }
+  
+  # ggplot(data=env_traits_curves,
+  #        aes(x=30*env, y=r, color=factor(species))) + 
+  #   geom_line()
+  
+  rcompare_plot<- ggplot(data=dynamics.df_sim,
+                         aes(x=100*env, y=r_obs, color=factor(species))) + 
+    geom_point(alpha=1/10) +
+    geom_line(data=env_traits_curves, aes(y=r), size=1.5, linetype='dashed') + 
+    facet_wrap(~species) +
+    geom_smooth(size=1.5) + 
+    scale_y_sqrt(breaks=c(0, 1, 2, 3, 4, 5, 10, 20), limits=c(0,20)) +
+    theme_bw()
+  
+  return(rcompare_plot)
+}
