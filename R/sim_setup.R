@@ -27,46 +27,60 @@
 #'
 #' @export
 #' 
-convert_OCN_to_igraph <- function(OCN, out_format, out_SSNdir) {
+convert_OCN <- function(OCN, out_format, out_SSNdir, idcol = 'patch') {
+  out_OCN_formatted <- list()
+  
   #Create graph
   #(besides outlets which do not have downstream edges)
-  if (out_format == 'igraph') {
-    formatted_net <- data.table(from = 1:OCN$RN$nNodes,
-                                to = OCN$RN$downNode,
-                                weight = OCN$RN$leng,
-                                DA = OCN$RN$A) %>%
+  if ('igraph' %in% out_format) {
+    igraph <- data.table(from = 1:OCN$RN$nNodes,
+                         to = OCN$RN$downNode,
+                         weight = OCN$RN$leng,
+                         DA = OCN$RN$A) %>%
       .[to != 0,] %>% #remove outlet
       .[order(to),] %>%
       graph_from_data_frame %>% 
       set.vertex.attribute(name ='x', 
                            value = OCN$RN$X) %>%
       set.vertex.attribute(name ='y', 
-                           value = OCN$RN$Y)
+                           value = OCN$RN$Y) %>%
+      set.vertex.attribute(name = idcol,
+                           value = 1:gorder(.))
     
-  } else if (out_format == "SSN") {
-    formatted_net <- OCN_to_SSN(OCN = OCN,
-                                level = "RN",
-                                obsSites = 1:OCN$RN$nNodes,
-                                #predDesign, 
-                                #predSites,
-                                path = out_SSNdir,
-                                randomAllocation = FALSE,
-                                importToR = TRUE)
+    out_OCN_formatted <- c(out_OCN_formatted, igraph=list(igraph))
+    
+  } 
+  
+  if ("SSN" %in% out_format) {
+    SSN <- OCN_to_SSN(OCN = OCN,
+                      level = "RN",
+                      obsSites = 1:OCN$RN$nNodes,
+                      #predDesign, 
+                      #predSites,
+                      path = out_SSNdir,
+                      randomAllocation = FALSE,
+                      importToR = TRUE)
+    
+    ssn_df <- SSN::getSSNdata.frame(SSN)
+    ssn_df[, idcol] <- ssn_df[, "locID"]
+    SSN <- SSN::putSSNdata.frame(ssn_df, SSN)
+    
+    out_OCN_formatted <- c(out_OCN_formatted, SSN=SSN)
   }
-  return(formatted_net)
+  return(out_OCN_formatted)
 }
 
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCNigraph ~~~~~~~~~~~~~~~~~~~~~~~~####
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCN_formatted ~~~~~~~~~~~~~~~~~~~~~~~~####
 
 #' Generate OCN
-#' @author adapted from Claire Jacquet (OID: 10.1111/OIK.09372)
+#' @author inspiration and parameters from Claire Jacquet (OID: 10.1111/OIK.09372)
 #' 
 #' 
-generate_OCNigraph <- function(patches,out_format, out_SSNdir,
-                               cellsize = 0.5, dimX = 25, dimY = 25,
-                               outletPos = 3, expEnergy = 0.1, 
-                               coolingRate = 0.3, slope0 = 0.05,
-                               plot=TRUE) {
+generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
+                                   cellsize = 0.5, dimX = 25, dimY = 25,
+                                   outletPos = 3, expEnergy = 0.1, 
+                                   coolingRate = 0.3, slope0 = 0.05,
+                                   plot=TRUE) {
   set.seed(1)
   OCN <- create_OCN(dimX, dimY, 
                     cellsize = cellsize, 
@@ -92,9 +106,9 @@ generate_OCNigraph <- function(patches,out_format, out_SSNdir,
                       backgroundColor = NULL)
   }
   
-  graph <- convert_OCN_to_igraph(OCN = OCN, 
-                                 out_format = out_format,
-                                 out_SSNdir = out_SSNdir)
+  graph <- convert_OCN(OCN = OCN, 
+                       out_format = out_format,
+                       out_SSNdir = out_SSNdir)
   
   return(graph)
 }
@@ -171,13 +185,12 @@ plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
   return(g)
 }
 
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#################### ADD SSN CAPABILITY
-compute_distmat <- function(landscape, torus) {
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#### 
+compute_distmat <- function(landscape, torus, idcol='patch') {
   if (inherits(landscape, 'igraph')) {
     dist_mat <- igraph::distances(landscape)
-  } else if (inherits(landscape, "SpatialStreamNetwork")) {
-    SSN::createDistMat(ssn, o.write=TRUE)
-    dist_mat <- SSN::getStreamDistMat(landscape)[[1]]
+    colnames(dist_mat) <- get.vertex.attribute(landscape, 'patch')
+    rownames(dist_mat) <- get.vertex.attribute(landscape, 'patch')
   } else {
     #Compute distance among sites
     if(torus == TRUE){
@@ -217,7 +230,7 @@ compute_distmat <- function(landscape, torus) {
 #' @export
 #'
 #'
-dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, 
+dispersal_matrix <- function(landscape, torus = TRUE, 
                              kernel_exp = 0.1, plot = TRUE){
   
   dist_mat <- compute_distmat(landscape = landscape,
@@ -289,7 +302,7 @@ simulate_envSSN <- function(ssn, timesteps, plot = FALSE, seed) {
   if (!missing(seed)) {
     set.seed(seed)
   }
-
+  
   ## Create stream distance matrices
   SSN::createDistMat(ssn, o.write=TRUE)
   
@@ -392,7 +405,7 @@ simulate_envSSN <- function(ssn, timesteps, plot = FALSE, seed) {
     print(ts_plot)
   }
   
-  return(df_sim)
+  return(df_sim[, c("patch", "time", "env1"), with=F])
 }
 
 
@@ -431,7 +444,7 @@ simulate_envSSN <- function(ssn, timesteps, plot = FALSE, seed) {
 env_generate <- function(landscape, env1Scale = 500,
                          timesteps = 1000, spatial_autocor = TRUE, 
                          torus=TRUE, plot = TRUE) {
-
+  
   if (inherits(landscape, 'igraph')) {
     patches <- gorder(landscape)
     landscape <- as.data.table(get.vertex.attribute(landscape))
@@ -444,6 +457,11 @@ env_generate <- function(landscape, env1Scale = 500,
       env_df <- simulate_envSSN(ssn = landscape,
                                 timesteps = timesteps,
                                 plot = FALSE)
+      
+      #(to better fill 0-1 space?)
+      ecum <- ecdf(env_df$env1)
+      env_cum <- ecum(env_df$env1)
+      env_df$env1 <- env_cum
     } else { #i.e. if spatial_autocor == FALSE
       print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
       
@@ -622,7 +640,6 @@ compare_predobs_env_traits <- function(MCsim, subn) {
                                      Nlag1 := shift(N, n=1, type='lag'),
                                      by=.(species, patch)] %>%
     .[Nlag1 > 0, r_obs := N/Nlag1] %>%
-    .[!is.na(r_obs)] %>%
     .[, N_stand := (N-min(N))/(max(N)-min(N))]
   
   min_env <- min(dynamics_df_sim$env)
@@ -645,7 +662,7 @@ compare_predobs_env_traits <- function(MCsim, subn) {
   env_traits_curves[, r_stand := (r-min(r))/(max(r)-min(r))]
   
   if (!missing(subn)) {
-    dynamics_df_sim <- dynamics_df_sim[sample(dynamics_df_sim[!is.na(r_obs), .N],
+    dynamics_df_sim <- dynamics_df_sim[sample(dynamics_df_sim[, .N],
                                               subn,
                                               replace=F),]
   }

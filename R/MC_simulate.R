@@ -59,7 +59,9 @@ simulate_MC <- function(
   } else {
     if (inherits(landscape, 'igraph')) {
       patches <- gorder(landscape)
-    } else if (inherits(landscape, 'data.frame')) {
+      
+    } else if (inherits(landscape, c('data.frame',
+                                     "SpatialStreamNetwork"))) {
       patches <- nrow(landscape)
     }
   }
@@ -71,13 +73,7 @@ simulate_MC <- function(
                                  torus = torus, 
                                  kernel_exp = kernel_exp, 
                                  plot = plot)
-  } else {
-    disp_mat <- dispersal_matrix(landscape = landscape, 
-                                 disp_mat = disp_mat, 
-                                 torus = torus,
-                                 kernel_exp = kernel_exp, 
-                                 plot = plot)
-  }
+  } 
   
   #Get environmental conditions
   if (missing(env_df)){
@@ -87,11 +83,6 @@ simulate_MC <- function(
                            plot = plot)
   } else {
     timesteps <- length(unique(env_df$time))- burn_in
-    # env_df <- env_generate(landscape = landscape, 
-    #                        env_df = env_df, 
-    #                        env1Scale = env1Scale, 
-    #                        timesteps = timesteps+burn_in, 
-    #                        plot = plot)
   }
   
   #Get species traits matrix 
@@ -106,14 +97,6 @@ simulate_MC <- function(
                                 plot = plot)
   } else {
     species <- nrow(env_traits_df)
-    # env_traits_df <- env_traits(species = species, 
-    #                             max_r = max_r, 
-    #                             min_env = min_env, 
-    #                             max_env = max_env, 
-    #                             env_niche_breadth = env_niche_breadth, 
-    #                             optima_spacing = optima_spacing, 
-    #                             optima = env_optima, 
-    #                             plot = plot)
   }
   
   #Get species interaction matrix
@@ -236,7 +219,7 @@ simulate_MC <- function(
                             time_run = rep(seq(-(burn_in + initialization), 
                                                -burn_in), 
                                            each = patches))
-  env_df <- rbind(env_df_init,env_df)
+  env_df <- rbind(env_df_init, env_df)
   
   if(plot == TRUE){
     sample_patches <- sample(1:patches, 

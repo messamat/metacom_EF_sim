@@ -10,14 +10,14 @@ resdir = file.path(rootdir, 'results')
 #--- Define targets plan ------------------------------------------------------
 list(
   tar_target(
-    OCN_formatted,
-    generate_OCNigraph(
-      patches=100, 
+    OCN_formatted_list,
+    generate_OCN_formatted(
+      patches = 100, 
       cellsize = 0.5, 
       dimX = 25, 
       dimY = 25, 
       plot = T,
-      out_format = 'SSN',
+      out_format = list('SSN', 'igraph'),
       out_SSNdir = file.path(resdir,
                              paste0('simSSN_', 
                                     format(Sys.Date(), "%Y%m%d")))
@@ -31,7 +31,7 @@ list(
       max_r = 5,
       min_env = 0,
       max_env = 1,
-      env_niche_breadth = 0.5,
+      env_niche_breadth = 0.2,
       plot = F,
       optima_spacing = 'random'
     )
@@ -40,7 +40,7 @@ list(
   tar_target(
     env_df,
     env_generate(
-      landscape = OCN_formatted,
+      landscape = OCN_formatted_list$SSN,
       env1Scale = 500, 
       timesteps = 2000, #Includes burn-in
       spatial_autocor = TRUE, 
@@ -48,24 +48,51 @@ list(
     )
   ),
   
+  tar_target(
+    dist_mat,
+    compute_distmat(landscape = OCN_formatted_list$igraph)
+  ),
+  
   tarchetypes::tar_map(
-    values = tibble(
-      in_dispersal = c(0, 0.01, 0.05)
+    values = expand.grid(
+      data.table(
+        in_kernel = c(0.05, 0.1, 0.5),
+        in_dispersal = c(0.01, 0.1)
+      )
+    ) %>%
+      setDT %>%
+      rbind(data.table(in_kernel = 0, 
+                       in_dispersal = 0)
+            ) %>%
+      .[, scenario_name := paste0("kernel_", in_kernel, 
+                                  "_dispersal_", in_dispersal)]
+    ,
+    
+    names = "scenario_name",
+      
+    tar_target(
+      disp_mat,
+      dispersal_matrix(
+        landscape = OCN_formatted_list$igraph,
+        kernel_exp = in_kernel, 
+        plot = TRUE
+      )
     ),
     
     tar_target(
       sim_sp1,
       simulate_MC(#timesteps = 1200, 
-                  burn_in = 800,
-                  initialization = 200,
-                  intra = 1,
-                  min_inter = 0, 
-                  max_inter = 0.5,
-                  dispersal = in_dispersal,
-                  landscape = OCN_formatted,
-                  env_df = env_df,
-                  env_traits_df = env_traits_df,
-                  )
+        burn_in = 800,
+        initialization = 200,
+        intra = 1,
+        min_inter = 0, 
+        max_inter = 0.5,
+        dispersal = in_dispersal,
+        landscape = OCN_formatted_list$igraph,
+        disp_mat = disp_mat,
+        env_df = env_df,
+        env_traits_df = env_traits_df,
+      )
     ),
     
     tar_target(
