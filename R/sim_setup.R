@@ -171,10 +171,13 @@ plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
   return(g)
 }
 
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#################### ADD SSN CAPABILITY
 compute_distmat <- function(landscape, torus) {
   if (inherits(landscape, 'igraph')) {
     dist_mat <- igraph::distances(landscape)
+  } else if (inherits(landscape, "SpatialStreamNetwork")) {
+    SSN::createDistMat(ssn, o.write=TRUE)
+    dist_mat <- SSN::getStreamDistMat(landscape)[[1]]
   } else {
     #Compute distance among sites
     if(torus == TRUE){
@@ -218,7 +221,7 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
                              kernel_exp = 0.1, plot = TRUE){
   
   dist_mat <- compute_distmat(landscape = landscape,
-                  torus = torus)
+                              torus = torus)
   
   disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
   diag(disp_mat) <- 0
@@ -238,6 +241,160 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
   
   return (disp_mat)
 }
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ plot_SSNenv ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+plot_SSNenv <- function(snn, df_sim, 
+                        timesteps_to_plot = 1:10, tscol = 'timestep') {
+  ## Extract stream (edge) network structure, including the additive function value
+  nets <- SSNbayes::collapse(ssn, par = 'addfunccol')
+  
+  ## Create additive function value categories for plotting
+  nets$afv_cat <- cut(nets$addfunccol,
+                      breaks = seq(min(nets$addfunccol),
+                                   max(nets$addfunccol),
+                                   length.out=6),
+                      labels = 1:5,
+                      include.lowest = T)
+  
+  ## Plot simulated temperature, by date, with line width proportional to afv_cat
+  p <- ggplot(nets) +
+    geom_path(aes(X1, X2, group = slot, size = afv_cat), lineend = 'round',
+              linejoin = 'round', col = 'lightblue')+
+    geom_point(data = dplyr::filter(df_sim, 
+                                    get(tscol) %in% timesteps_to_plot),
+               aes(x = coords.x1, y = coords.x2, col = y, shape = point),
+               size = 1)+
+    scale_size_manual(values = seq(0.2,2,length.out = 5))+
+    facet_wrap(~get(tscol), nrow = 2)+
+    scale_color_viridis(option = 'C')+
+    scale_shape_manual(values = c(16,15))+
+    xlab("x-coordinate") +
+    ylab("y-coordinate")+
+    theme_bw()
+  
+  print(p)
+  return(p)
+}
+
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ simulate_envSSN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+simulate_envSSN <- function(ssn, timesteps, plot = FALSE, seed) {
+  #Code from https://www.kaggle.com/code/edsans/ssnbayes-simulated/notebook
+  #Tutorial with SSNBayes package
+  
+  ## Set some useful options for modelling
+  RNGkind(sample.kind = "Rounding")
+  
+  ## Set the seed for reproducibility
+  if (!missing(seed)) {
+    set.seed(seed)
+  }
+
+  ## Create stream distance matrices
+  SSN::createDistMat(ssn, o.write=TRUE)
+  
+  ## Extract the data.frames for the observed and prediction location data
+  rawDFobs <- SSN::getSSNdata.frame(ssn, Name = "Obs")
+  
+  ## Extract the geographic coordinates from the SpatialStreamNetwork
+  ## object and add to data.frames
+  obs_data_coord <- data.frame(ssn@obspoints@SSNPoints[[1]]@point.coords)
+  obs_data_coord$pid <- as.numeric(rownames(obs_data_coord))
+  rawDFobs <- rawDFobs %>% left_join(obs_data_coord, by = c("pid"),
+                                     keep = FALSE)
+  rawDFobs$point <- "Obs" ## Create label for observed points
+  
+  ## Generate continous covariate at observed and prediction locations
+  if (!missing(seed)) {
+    set.seed(seed)
+  }
+  rawDFobs[,"X1"] <- rnorm(length(rawDFobs[,1]))
+  #rawDFobs[,"X2"] <- rnorm(length(rawDFobs[,1]))
+  #rawDFobs[,"X3"] <- rnorm(length(rawDFobs[,1]))
+  
+  ## Put the new covariates back in the SpatialStreamNetwork object
+  ssn <- SSN::putSSNdata.frame(rawDFobs, ssn, Name = 'Obs')
+  
+  ## Simulate the response variable at observed and prediction locations
+  if (!missing(seed)) {
+    set.seed(seed)
+  }
+  sim.out <- SSN::SimulateOnSSN(ssn.object = ssn,
+                                ObsSimDF = rawDFobs, ## observed data.frame
+                                #PredSimDF = rawDFpred, ## prediction data.frame
+                                #PredID = "preds", ## name of prediction dataset
+                                formula = ~ X1,
+                                coefficients = c(10, 2), ## regression coefficients
+                                CorModels = c("Exponential.taildown"), ## covariance model
+                                use.nugget = TRUE, ## include nugget effect
+                                CorParms = c(3, 10, .1)) ## covariance parameters
+  
+  
+  ## Extract the SpatialStreamNetwork object from the list returned by
+  ## SimulateOnSSN and extract the observed and prediction site
+  ## data.frames. Notice the new column Sim_Values in the data.frames
+  sim.ssn <- sim.out$ssn.object
+  df_sim <- SSN::getSSNdata.frame(sim.ssn,"Obs") %>%
+    setDT %>%
+    replicate(timesteps, ., simplify = FALSE) %>%
+    rbindlist
+  
+  ## Expand data.frames to include t=timesteps days per location
+  df_sim[, timestep := rep(1:timesteps,
+                           each = (.N/timesteps))] # Set timestep variable
+  
+  #Create autoregressive model
+  if (!missing(seed)) {
+    set.seed(seed)
+  }
+  phi <- 0.8 ## lag 1 autocorrelation value
+  ar1_sim <- nlme::corAR1(form = ~ timestep, value = phi) # can also use corExp function
+  AR1 <- nlme::Initialize(ar1_sim, 
+                          data = data.frame(timestep = unique(df_sim$timestep)))
+  
+  ## Create a vector of AR1 errors for each date and expand to all all locations
+  #NB AR1 error
+  epsilon <- t(chol(corMatrix(AR1))) %*% rnorm(length(unique(df_sim$timestep)), 
+                                               0, 2) 
+  epsilon <- rep(epsilon, each = length(unique(df_sim$locID))) +
+    rnorm(length(epsilon)*length(unique(df_sim$locID)), 0, 0.25) # for all the locations
+  
+  epsilon_df <- data.table(timestep = rep(unique(df_sim$timestep), 
+                                          each = length(unique(df_sim$locID))),
+                           locID = rep(unique(df_sim$locID), 
+                                       times = length(unique(df_sim$timestep))),
+                           epsilon = epsilon)
+  
+  df_sim <- df_sim %>% left_join(epsilon_df, 
+                                 by = c('timestep' = 'timestep', 
+                                        'locID' = 'locID'))
+  
+  ## Create a new simulated response variable, y, with errors added
+  df_sim$env1 <- df_sim$Sim_Values + df_sim$epsilon 
+  
+  #Rename columns to match the rest of the workflow
+  setnames(df_sim, 
+           c("locID", "coords.x1", "coords.x2", "timestep"),
+           c("patch", "x", "y", "time")
+  )
+  
+  #Standardize all values to fall between 0 and 1
+  df_sim[, env1 := vegan::decostand(env1, method = "range")]
+  
+  if (plot) {
+    ## Create line plots of the response over time for training and test datasets
+    ts_plot <- ggplot(df_sim) +
+      geom_line(aes(x = time, y = env1, group = patch), alpha = 0.4) +
+      ylab("Simulated environment")+
+      #geom_line(aes(x = timestep, y=Sim_Values, group = locID), alpha=0.4, color='red') +
+      theme_bw()
+    
+    print(ts_plot)
+  }
+  
+  return(df_sim)
+}
+
 
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ env_generate ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
@@ -275,60 +432,18 @@ env_generate <- function(landscape, env1Scale = 500,
                          timesteps = 1000, spatial_autocor = TRUE, 
                          torus=TRUE, plot = TRUE) {
 
-  if (spatial_autocor) {
-    ##############################################################################
-    #To compute random fields over stream distances, tried generating synthetic
-    #x and y coordinates with distances in euclidean space (because
-    #providing "distances" to RFSimulate didn't work) but that's really hard and 
-    #no options yield exact results due to non-euclidean space
-    dist_mat <- compute_distmat(landscape = landscape)
-  }
-  
   if (inherits(landscape, 'igraph')) {
     patches <- gorder(landscape)
     landscape <- as.data.table(get.vertex.attribute(landscape))
-                               
   } else if (inherits(landscape, 'data.frame')) {
     patches <- nrow(landscape)
   }
   
   repeat {
     if (spatial_autocor) {
-      #Generate a stationary isotropic covariance model whose corresponding
-      #covariance function only depends on the distance r ≥ 0 between two points
-      model <- RMexp(var=0.5, scale=env1Scale) + # with variance 4 and scale 10
-        RMnugget(var=0) + # nugget
-        RMtrend(mean=0.05) # and mean
-      
-      ################## NEED TO WORK ON THIS TO USE NETWORK DISTANCES ##################################
-      #Simulate data after burn_in period based on model for whole landscape
-      # RF <- RFsimulate(model = model,
-      #                  distances = as.dist(dist_mat),
-      #                  dim = 1
-      #                  ) 
-      
-      RF <- RFsimulate(model = model,
-                       x = landscape$x,
-                       y = landscape$y,
-                       T = 1:timesteps)
-      
-      #Standardize all values to fall between 0 and 1
-      env_df <- data.frame(
-        patch = landscape$name,
-        env1 = decostand(RF$variable1,
-                         method = "range"), 
-        x= landscape$x, 
-        y = landscape$y, 
-        time = rep(1:timesteps,
-                   each = patches))
-      
-      #Convert raw environmental values to probabilities (y) 
-      #from the empirical cumulative distribution function 
-      #(to better fill 0-1 space?)
-      ecum <- ecdf(env_df$env1)
-      env_cum <- ecum(env_df$env1)
-      env_df$env1 <- env_cum
-      
+      env_df <- simulate_envSSN(ssn = landscape,
+                                timesteps = timesteps,
+                                plot = FALSE)
     } else { #i.e. if spatial_autocor == FALSE
       print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
       
@@ -354,7 +469,9 @@ env_generate <- function(landscape, env1Scale = 500,
     #Get values at first step for burn-in
     env.initial <- env_df[env_df$time == 1,]
     #Make sure there's a sufficient range of env values for burn-in
-    if((max(env.initial$env1)-min(env.initial$env1)) > 0.6) {break}
+    range_ini <- (max(env.initial$env1)-min(env.initial$env1))
+    print(range_ini)
+    if(range_ini > 0.5) {break}
   }
   
   if(plot == TRUE){
