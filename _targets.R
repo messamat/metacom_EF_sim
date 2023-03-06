@@ -10,12 +10,18 @@ resdir = file.path(rootdir, 'results')
 #--- Define targets plan ------------------------------------------------------
 list(
   tar_target(
-    OCNigraph,
-    generate_OCNigraph(patches=100, 
-                       cellsize = 0.5, 
-                       dimX = 25, 
-                       dimY = 25, 
-                       plot = T)
+    OCN_formatted,
+    generate_OCNigraph(
+      patches=100, 
+      cellsize = 0.5, 
+      dimX = 25, 
+      dimY = 25, 
+      plot = T,
+      out_format = 'SSN',
+      out_SSNdir = file.path(resdir,
+                             paste0('simSSN_', 
+                                    format(Sys.Date(), "%Y%m%d")))
+    )
   ),
   
   tar_target(
@@ -34,7 +40,7 @@ list(
   tar_target(
     env_df,
     env_generate(
-      landscape = OCNigraph,
+      landscape = OCN_formatted,
       env1Scale = 500, 
       timesteps = 2000, #Includes burn-in
       spatial_autocor = TRUE, 
@@ -56,7 +62,7 @@ list(
                   min_inter = 0, 
                   max_inter = 0.5,
                   dispersal = in_dispersal,
-                  landscape = OCNigraph,
+                  landscape = OCN_formatted,
                   env_df = env_df,
                   env_traits_df = env_traits_df,
                   )

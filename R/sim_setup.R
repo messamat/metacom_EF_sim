@@ -1,4 +1,4 @@
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ convert_OCN_to_igraph ~~~~~~~~~~~~~~~~~~~~~~####
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ convert_OCN ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Converts an OCN object to an igraph object.
 #'
 #' This helper function converts an optimal channel network (OCN) created with
@@ -26,22 +26,34 @@
 #' graph <- OCN2graph(OCN)
 #'
 #' @export
-convert_OCN_to_igraph <- function(OCN) {
+#' 
+convert_OCN_to_igraph <- function(OCN, out_format, out_SSNdir) {
   #Create graph
   #(besides outlets which do not have downstream edges)
-  graph <- data.table(from = 1:OCN$RN$nNodes,
-                      to = OCN$RN$downNode,
-                      weight = OCN$RN$leng,
-                      DA = OCN$RN$A) %>%
-    .[to != 0,] %>% #remove outlet
-    .[order(to),] %>%
-    graph_from_data_frame %>% 
-    set.vertex.attribute(name ='x', 
-                         value = OCN$RN$X) %>%
-    set.vertex.attribute(name ='y', 
-                         value = OCN$RN$Y)
-  
-  return(graph)
+  if (out_format == 'igraph') {
+    formatted_net <- data.table(from = 1:OCN$RN$nNodes,
+                                to = OCN$RN$downNode,
+                                weight = OCN$RN$leng,
+                                DA = OCN$RN$A) %>%
+      .[to != 0,] %>% #remove outlet
+      .[order(to),] %>%
+      graph_from_data_frame %>% 
+      set.vertex.attribute(name ='x', 
+                           value = OCN$RN$X) %>%
+      set.vertex.attribute(name ='y', 
+                           value = OCN$RN$Y)
+    
+  } else if (out_format == "SSN") {
+    formatted_net <- OCN_to_SSN(OCN = OCN,
+                                level = "RN",
+                                obsSites = 1:OCN$RN$nNodes,
+                                #predDesign, 
+                                #predSites,
+                                path = out_SSNdir,
+                                randomAllocation = FALSE,
+                                importToR = TRUE)
+  }
+  return(formatted_net)
 }
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCNigraph ~~~~~~~~~~~~~~~~~~~~~~~~####
@@ -50,7 +62,8 @@ convert_OCN_to_igraph <- function(OCN) {
 #' @author adapted from Claire Jacquet (OID: 10.1111/OIK.09372)
 #' 
 #' 
-generate_OCNigraph <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
+generate_OCNigraph <- function(patches,out_format, out_SSNdir,
+                               cellsize = 0.5, dimX = 25, dimY = 25,
                                outletPos = 3, expEnergy = 0.1, 
                                coolingRate = 0.3, slope0 = 0.05,
                                plot=TRUE) {
@@ -79,7 +92,9 @@ generate_OCNigraph <- function(patches, cellsize = 0.5, dimX = 25, dimY = 25,
                       backgroundColor = NULL)
   }
   
-  graph <- convert_OCN_to_igraph(OCN)
+  graph <- convert_OCN_to_igraph(OCN = OCN, 
+                                 out_format = out_format,
+                                 out_SSNdir = out_SSNdir)
   
   return(graph)
 }
@@ -156,6 +171,23 @@ plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
   return(g)
 }
 
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
+compute_distmat <- function(landscape, torus) {
+  if (inherits(landscape, 'igraph')) {
+    dist_mat <- igraph::distances(landscape)
+  } else {
+    #Compute distance among sites
+    if(torus == TRUE){
+      dist_mat <- as.matrix(som.nn::dist.torus(coors = landscape))
+    } else {
+      dist_mat <- as.matrix(dist(landscape))
+    }
+  }
+  
+  return(dist_mat)
+}
+
+
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ dispersal_matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate Dispersal Matrix
 #'
@@ -185,16 +217,8 @@ plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
 dispersal_matrix <- function(landscape, torus = TRUE, disp_mat, 
                              kernel_exp = 0.1, plot = TRUE){
   
-  if (inherits(landscape, 'igraph')) {
-    dist_mat <- igraph::distances(landscape)
-  } else {
-    #Compute distance among sites
-    if(torus == TRUE){
-      dist_mat <- as.matrix(som.nn::dist.torus(coors = landscape))
-    } else {
-      dist_mat <- as.matrix(dist(landscape))
-    }
-  }
+  dist_mat <- compute_distmat(landscape = landscape,
+                  torus = torus)
   
   disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
   diag(disp_mat) <- 0
@@ -247,12 +271,23 @@ dispersal_matrix <- function(landscape, torus = TRUE, disp_mat,
 #'
 #' @export
 #'
-env_generate <- function(landscape, env1Scale = 500, 
-                         timesteps = 1000, spatial_autocor = FALSE, plot = TRUE){
+env_generate <- function(landscape, env1Scale = 500,
+                         timesteps = 1000, spatial_autocor = TRUE, 
+                         torus=TRUE, plot = TRUE) {
+
+  if (spatial_autocor) {
+    ##############################################################################
+    #To compute random fields over stream distances, tried generating synthetic
+    #x and y coordinates with distances in euclidean space (because
+    #providing "distances" to RFSimulate didn't work) but that's really hard and 
+    #no options yield exact results due to non-euclidean space
+    dist_mat <- compute_distmat(landscape = landscape)
+  }
   
   if (inherits(landscape, 'igraph')) {
     patches <- gorder(landscape)
-    landscape <- as.data.table(get.vertex.attribute(graph))
+    landscape <- as.data.table(get.vertex.attribute(landscape))
+                               
   } else if (inherits(landscape, 'data.frame')) {
     patches <- nrow(landscape)
   }
@@ -265,10 +300,16 @@ env_generate <- function(landscape, env1Scale = 500,
         RMnugget(var=0) + # nugget
         RMtrend(mean=0.05) # and mean
       
+      ################## NEED TO WORK ON THIS TO USE NETWORK DISTANCES ##################################
       #Simulate data after burn_in period based on model for whole landscape
+      # RF <- RFsimulate(model = model,
+      #                  distances = as.dist(dist_mat),
+      #                  dim = 1
+      #                  ) 
+      
       RF <- RFsimulate(model = model,
-                       x = landscape$x*10, 
-                       y = landscape$y*10, 
+                       x = landscape$x,
+                       y = landscape$y,
                        T = 1:timesteps)
       
       #Standardize all values to fall between 0 and 1
@@ -283,10 +324,10 @@ env_generate <- function(landscape, env1Scale = 500,
       
       #Convert raw environmental values to probabilities (y) 
       #from the empirical cumulative distribution function 
-      #(to fully fill 0-1 space?)
-      ecum <- ecdf(env.df$env1)
-      env.cum <- ecum(env.df$env1)
-      env.df$env1 <- env.cum
+      #(to better fill 0-1 space?)
+      ecum <- ecdf(env_df$env1)
+      env_cum <- ecum(env_df$env1)
+      env_df$env1 <- env_cum
       
     } else { #i.e. if spatial_autocor == FALSE
       print("This version differs from Thompson et al. 2020 in that it does not produce spatially autocorrelated environmental variables.")
