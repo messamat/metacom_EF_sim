@@ -2,11 +2,6 @@ source("R/packages.R")
 source("R/sim_setup.R")
 source("R/MC_simulate.R")
 
-rootdir = rprojroot::find_root(rprojroot::has_dir('src'))
-datdir = file.path(rootdir, 'data')
-resdir = file.path(rootdir, 'results')
-
-
 #--- Define targets plan ------------------------------------------------------
 list(
   tar_target(
@@ -18,9 +13,8 @@ list(
       dimY = 25, 
       plot = T,
       out_format = list('SSN', 'igraph'),
-      out_SSNdir = file.path(resdir,
-                             paste0('simSSN_', 
-                                    format(Sys.Date(), "%Y%m%d")))
+      out_SSNdir = file.path(paste0('simSSN_', 
+                                    format(Sys.Date(), "%Y%m%d%H%M")))
     )
   ),
   
