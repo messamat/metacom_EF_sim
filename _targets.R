@@ -14,7 +14,8 @@ list(
       plot = T,
       out_format = list('SSN', 'igraph'),
       out_SSNdir = file.path(paste0('simSSN_', 
-                                    format(Sys.Date(), "%Y%m%d%H%M")))
+                                    format(Sys.Date(), "%Y%m%d"),
+                                    format(Sys.time(), "%H%M")))
     )
   ),
   
