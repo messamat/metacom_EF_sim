@@ -31,7 +31,7 @@ list(
       max_r = 5,
       min_env = 0,
       max_env = 1,
-      env_niche_breadth = 0.2,
+      env_niche_breadth = 0.3,
       plot = T,
       optima_spacing = 'random'
     )
@@ -77,7 +77,7 @@ list(
     species_int_mat(species = nrow(env_traits_df),
                     intra = 1,
                     min_inter = 0,
-                    max_inter = 1, 
+                    max_inter = 0.5, 
                     comp_scaler = 0.05,
                     plot = TRUE)
   ),
@@ -121,6 +121,7 @@ list(
         disp_mat = disp_mat,
         env_df = env_df,
         env_traits_df = env_traits_df,
+        int_mat = int_mat,
       )
     ),
     

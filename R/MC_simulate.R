@@ -107,15 +107,7 @@ simulate_MC <- function(
                                max_inter = max_inter, 
                                comp_scaler = comp_scaler, 
                                plot = TRUE)
-  } else {
-    int_mat <- species_int_mat(species = species, 
-                               int_mat = int_mat, 
-                               intra = intra, 
-                               min_inter = min_inter, 
-                               max_inter = max_inter, 
-                               comp_scaler = comp_scaler, 
-                               plot = TRUE)
-  }
+  } 
   
   dynamics_df <- data.frame()
   

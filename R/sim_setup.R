@@ -556,7 +556,8 @@ env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1,
   if(plot == TRUE){
     matplot(sapply(X = 1:species, FUN = function(x) {
       exp(-((env_traits_df$optima[x]-seq(min_env, max_env, length = 30))/(2*env_traits_df$env_niche_breadth[x]))^2)
-    })*rep(max_r,each = 30), type = "l", lty = 1, ylab = "r", xlab = "environment", ylim = c(0,max(max_r)))
+    })*rep(max_r,each = 30), 
+    type = "l", lty = 1, ylab = "r", xlab = "environment", ylim = c(0,max(max_r)))
     
   }
   return(env_traits_df)

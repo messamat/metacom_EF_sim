@@ -224,24 +224,6 @@
         "backports"
       ]
     },
-    "bayesplot": {
-      "Package": "bayesplot",
-      "Version": "1.10.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "9c4f6ab31da906185d23e69a88595cf7",
-      "Requirements": [
-        "dplyr",
-        "ggplot2",
-        "ggridges",
-        "glue",
-        "posterior",
-        "reshape2",
-        "rlang",
-        "tibble",
-        "tidyselect"
-      ]
-    },
     "betapart": {
       "Package": "betapart",
       "Version": "1.5.6",
@@ -436,24 +418,6 @@
       "Repository": "CRAN",
       "Hash": "8b708f296afd9ae69f450f9640be8990",
       "Requirements": []
-    },
-    "distributional": {
-      "Package": "distributional",
-      "Version": "0.3.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "be08f142d0b48ff1c8cfe39e1e3ac1c8",
-      "Requirements": [
-        "digest",
-        "farver",
-        "generics",
-        "ggplot2",
-        "lifecycle",
-        "numDeriv",
-        "rlang",
-        "scales",
-        "vctrs"
-      ]
     },
     "doSNOW": {
       "Package": "doSNOW",
@@ -677,18 +641,6 @@
         "withr"
       ]
     },
-    "ggridges": {
-      "Package": "ggridges",
-      "Version": "0.5.4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "c76ee8fe60939384b9726128e38caea0",
-      "Requirements": [
-        "ggplot2",
-        "scales",
-        "withr"
-      ]
-    },
     "globals": {
       "Package": "globals",
       "Version": "0.16.2",
@@ -775,10 +727,10 @@
     },
     "igraph": {
       "Package": "igraph",
-      "Version": "1.4.0",
+      "Version": "1.4.1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "14734eae03f062b55e794b07784aeddc",
+      "Hash": "a7ef0d811cb66d8be9da0d7b5ab80ded",
       "Requirements": [
         "Matrix",
         "magrittr",
@@ -1022,14 +974,6 @@
         "lattice"
       ]
     },
-    "numDeriv": {
-      "Package": "numDeriv",
-      "Version": "2016.8-1.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "df58958f293b166e4ab885ebcad90e02",
-      "Requirements": []
-    },
     "parallelly": {
       "Package": "parallelly",
       "Version": "1.34.0",
@@ -1117,24 +1061,6 @@
         "Rcpp"
       ]
     },
-    "posterior": {
-      "Package": "posterior",
-      "Version": "1.4.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "517e848868cb135ff66bb98c18361ecf",
-      "Requirements": [
-        "abind",
-        "checkmate",
-        "distributional",
-        "matrixStats",
-        "pillar",
-        "rlang",
-        "tensorA",
-        "tibble",
-        "vctrs"
-      ]
-    },
     "prettyunits": {
       "Package": "prettyunits",
       "Version": "1.1.1",
@@ -1219,18 +1145,6 @@
       "Repository": "CRAN",
       "Hash": "c1078316e1d4f70275fc1ea60c0bc431",
       "Requirements": []
-    },
-    "reshape2": {
-      "Package": "reshape2",
-      "Version": "1.4.4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "bb5996d0bd962d214a11140d77589917",
-      "Requirements": [
-        "Rcpp",
-        "plyr",
-        "stringr"
-      ]
     },
     "rgdal": {
       "Package": "rgdal",
@@ -1505,14 +1419,6 @@
         "withr",
         "yaml"
       ]
-    },
-    "tensorA": {
-      "Package": "tensorA",
-      "Version": "0.36.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "fd792ceac77f96b647fa8d6e1788969a",
-      "Requirements": []
     },
     "terra": {
       "Package": "terra",
