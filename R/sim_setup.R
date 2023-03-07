@@ -71,7 +71,6 @@ convert_OCN <- function(OCN, out_format, out_SSNdir, idcol = 'patch') {
 }
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCN_formatted ~~~~~~~~~~~~~~~~~~~~~~~~####
-
 #' Generate OCN
 #' @author inspiration and parameters from Claire Jacquet (OID: 10.1111/OIK.09372)
 #' 
@@ -101,7 +100,7 @@ generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
     draw_thematic_OCN(rep(1, OCN$RN$nNodes),
                       OCN,
                       drawNodes=T,
-                      addLegend=F,
+                      addLegend=T,
                       cex=1,
                       backgroundColor = NULL)
   }
@@ -159,7 +158,7 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 }
 
 
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ TODO: check dispersal matrix ~~~~~~~~~~~~~~~~####
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ check dispersal matrix ~~~~~~~~~~~~~~~~####
 #Check dispersal matrix
 # disp_mat <- disp_mat
 # rownames(disp_mat) <- 1:nrow(disp_mat)
@@ -169,7 +168,7 @@ landscape_generate <- function(patches = 100, xy, plot = TRUE) {
 #   stop ("disp_mat does not have a row and column for each patch in landscape")
 
 
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ TOCOMMENT: plot dispersal matrix ~~~~~~~~~~~~####
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ plot dispersal matrix ~~~~~~~~~~~~####
 plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
   g <- as.data.frame(disp_mat) %>%
     dplyr::mutate(to.patch = rownames(disp_mat)) %>%
@@ -256,7 +255,7 @@ dispersal_matrix <- function(landscape, torus = TRUE,
 }
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ plot_SSNenv ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~####
-plot_SSNenv <- function(snn, df_sim, 
+plot_SSNenv <- function(ssn, df_sim, 
                         timesteps_to_plot = 1:10, tscol = 'timestep') {
   ## Extract stream (edge) network structure, including the additive function value
   nets <- SSNbayes::collapse(ssn, par = 'addfunccol')
@@ -269,20 +268,28 @@ plot_SSNenv <- function(snn, df_sim,
                       labels = 1:5,
                       include.lowest = T)
   
+  ssn_points <- ssn@obspoints@SSNPoints[[1]]
+  
+  df_sim <- left_join(df_sim, 
+                      cbind(ssn_points@point.data, 
+                            ssn_points@point.coords),
+                      by='patch')
+  
   ## Plot simulated temperature, by date, with line width proportional to afv_cat
   p <- ggplot(nets) +
     geom_path(aes(X1, X2, group = slot, size = afv_cat), lineend = 'round',
               linejoin = 'round', col = 'lightblue')+
     geom_point(data = dplyr::filter(df_sim, 
                                     get(tscol) %in% timesteps_to_plot),
-               aes(x = coords.x1, y = coords.x2, col = y, shape = point),
-               size = 1)+
-    scale_size_manual(values = seq(0.2,2,length.out = 5))+
+               aes(x = coords.x1, y = coords.x2, col = env1),
+               size = 1.5)+
+    scale_size_manual(values = seq(0.2,2,length.out = 5), 
+                      name='Drainage area size class')+
     facet_wrap(~get(tscol), nrow = 2)+
     scale_color_viridis(option = 'C')+
     scale_shape_manual(values = c(16,15))+
-    xlab("x-coordinate") +
-    ylab("y-coordinate")+
+    xlab("x-coordinate (km)") +
+    ylab("y-coordinate (km)")+
     theme_bw()
   
   print(p)
@@ -628,7 +635,6 @@ species_int_mat <- function(species, intra = 1, min_inter = 0, max_inter = 1.5,
 ### 
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compare_predobs_env_traits ~~~~~~~~~~~~~~~~~~####
-
 compare_predobs_env_traits <- function(MCsim, subn) {
   
   dynamics_df <- MCsim$dynamics_df
@@ -679,13 +685,13 @@ compare_predobs_env_traits <- function(MCsim, subn) {
   # 
   
   rcompare_plot<- ggplot(data=dynamics_df_sim,
-                         aes(x=100*env, y=N_stand, color=factor(species))) + 
+                         aes(x=env, y=N_stand, color=factor(species))) + 
     geom_point(alpha=1/10) +
     geom_line(data=env_traits_curves, aes(y=r_stand),
               color='black', size=1.5, linetype='dashed') + 
     facet_wrap(~species) +
     geom_smooth(size=1.5, color='black') + 
-    scale_y_sqrt(breaks=seq(0,1, 0.1)) +
+    #scale_y_sqrt(breaks=seq(0,1, 0.1)) +
     theme_bw()
   
   return(rcompare_plot)

@@ -171,6 +171,7 @@ simulate_MC <- function(
       dispSP <- colSums(E) #Total number of emigrating individuals for each species
       
       I_hat_raw <- disp_mat%*%E 
+      
       #Probability that a dispersing individual of each species immigrates to each site
       I_hat <- t(t(I_hat_raw)/colSums(I_hat_raw)) 
       I_hat[is.nan(I_hat)] <- 1
@@ -196,7 +197,9 @@ simulate_MC <- function(
     #Implement stochastic extirpation 
     #(in the case of a competition-colonisation trade-off set-up 
     #see Simulation runs (4), p1321)
-    N[rbinom(n = species * patches, size = 1, prob = extirp_prob)>0] <- 0
+    N[rbinom(n = species * patches, 
+             size = 1, 
+             prob = extirp_prob)>0] <- 0
     
     
     dynamics_df <- rbind(dynamics_df, 

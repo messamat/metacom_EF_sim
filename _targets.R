@@ -27,12 +27,12 @@ list(
   tar_target(
     env_traits_df,
     env_traits(
-      species = 1,
+      species = 2,
       max_r = 5,
       min_env = 0,
       max_env = 1,
       env_niche_breadth = 0.2,
-      plot = F,
+      plot = T,
       optima_spacing = 'random'
     )
   ),
@@ -49,8 +49,37 @@ list(
   ),
   
   tar_target(
+    env_map,
+    plot_SSNenv(
+      ssn = OCN_formatted_list$SSN,
+      df_sim = env_df,
+      timesteps_to_plot = 1:10,
+      tscol = 'time'
+    )
+  ),
+  
+  tar_target(
+    env_plot,
+    ggplot(env_df[time %in% 1:100 & patch %in% 1:20,],
+           aes(x=time, y=env1, group=patch, color=factor(patch))) +
+      geom_line(alpha=0.7) +
+      theme_bw() +
+      theme(legend.position = 'none')
+  ),
+  
+  tar_target(
     dist_mat,
     compute_distmat(landscape = OCN_formatted_list$igraph)
+  ),
+  
+  tar_target(
+    int_mat,
+    species_int_mat(species = nrow(env_traits_df),
+                    intra = 1,
+                    min_inter = 0,
+                    max_inter = 1, 
+                    comp_scaler = 0.05,
+                    plot = TRUE)
   ),
   
   tarchetypes::tar_map(
@@ -86,7 +115,7 @@ list(
         initialization = 200,
         intra = 1,
         min_inter = 0, 
-        max_inter = 0.5,
+        max_inter = 1,
         dispersal = in_dispersal,
         landscape = OCN_formatted_list$igraph,
         disp_mat = disp_mat,

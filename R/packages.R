@@ -12,6 +12,7 @@ library(synchrony)
 library(tarchetypes)
 library(targets)
 library(vegan)
+library(viridis)
 
 
 #library(RandomFields)
