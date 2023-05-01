@@ -27,29 +27,34 @@
 #'
 #' @export
 #' 
+#' 
+OCN2graph <- function(OCN, idcol) {
+  graph = graph_from_adjacency_matrix(as.matrix(OCN$RN$W)) %>%
+    set.vertex.attribute(name ='x',
+                         value = OCN$RN$X) %>%
+    set.vertex.attribute(name ='y',
+                         value = OCN$RN$Y) %>%
+    set.vertex.attribute(name = 'DA',
+                         value = OCN$RN$A) %>%
+    set.vertex.attribute(name = idcol,
+                         value = 1:gorder(.))
+  
+  E(graph)$weight <- OCN$RN$leng[-7]
+  
+  # Put width
+  graph = set_vertex_attr(graph, "width", value = OCN$RN$A)
+  return(graph)
+}
+
 convert_OCN <- function(OCN, out_format, out_SSNdir, idcol = 'patch') {
   out_OCN_formatted <- list()
   
   #Create graph
   #(besides outlets which do not have downstream edges)
   if ('igraph' %in% out_format) {
-    igraph <- data.table(from = 1:OCN$RN$nNodes,
-                         to = OCN$RN$downNode,
-                         weight = OCN$RN$leng,
-                         DA = OCN$RN$A) %>%
-      .[to != 0,] %>% #remove outlet
-      .[order(to),] %>%
-      graph_from_data_frame %>% 
-      set.vertex.attribute(name ='x', 
-                           value = OCN$RN$X) %>%
-      set.vertex.attribute(name ='y', 
-                           value = OCN$RN$Y) %>%
-      set.vertex.attribute(name = idcol,
-                           value = 1:gorder(.))
-    
+    igraph <- OCN2graph(OCN, idcol)
     out_OCN_formatted <- c(out_OCN_formatted, igraph=list(igraph))
-    
-  } 
+  }
   
   if ("SSN" %in% out_format) {
     SSN <- OCN_to_SSN(OCN = OCN,
@@ -67,51 +72,9 @@ convert_OCN <- function(OCN, out_format, out_SSNdir, idcol = 'patch') {
     
     out_OCN_formatted <- c(out_OCN_formatted, SSN=SSN)
   }
+  
   return(out_OCN_formatted)
 }
-
-### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCN_formatted ~~~~~~~~~~~~~~~~~~~~~~~~####
-#' Generate OCN
-#' @author inspiration and parameters from Claire Jacquet (OID: 10.1111/OIK.09372)
-#' 
-#' 
-generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
-                                   cellsize = 0.5, dimX = 25, dimY = 25,
-                                   outletPos = 3, expEnergy = 0.1, 
-                                   coolingRate = 0.3, slope0 = 0.05,
-                                   plot=TRUE) {
-  set.seed(1)
-  OCN <- create_OCN(dimX, dimY, 
-                    cellsize = cellsize, 
-                    outletPos = outletPos, 
-                    expEnergy = expEnergy, 
-                    coolingRate = coolingRate)
-  OCN <- landscape_OCN(OCN, slope0 = slope0)
-  
-  #Determine the threshold area that generates the number of patches closest to "patches" argument
-  thrA <- as.data.table(
-    OCNet::find_area_threshold_OCN(OCN=OCN, thrValues=seq(0.5,50,0.05))) %>%
-    .[which.min(abs(nNodesRN-patches)), thrValues]
-  
-  #thrA = 5*cellsize^2
-  OCN <- aggregate_OCN(OCN, thrA = thrA)
-  
-  if (plot) {
-    draw_thematic_OCN(rep(1, OCN$RN$nNodes),
-                      OCN,
-                      drawNodes=T,
-                      addLegend=T,
-                      cex=1,
-                      backgroundColor = NULL)
-  }
-  
-  graph <- convert_OCN(OCN = OCN, 
-                       out_format = out_format,
-                       out_SSNdir = out_SSNdir)
-  
-  return(graph)
-}
-
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ landscape_generate ~~~~~~~~~~~~~~~~~~~~~~~~~####
 #' Generate landscape
@@ -183,6 +146,68 @@ plot_dispersal_matrix <- function(disp_mat, print=TRUE) {
   
   return(g)
 }
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ generate_OCN_formatted ~~~~~~~~~~~~~~~~~~~~~~~~####
+#' Generate OCN
+#' @author inspiration and parameters from Claire Jacquet (OID: 10.1111/OIK.09372)
+#' 
+#' 
+generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
+                                   cellsize = 0.5, dimX = 25, dimY = 25,
+                                   outletPos = 3, expEnergy = 0.1, 
+                                   coolingRate = 0.3, slope0 = 0.05,
+                                   plot=TRUE) {
+  set.seed(1)
+  OCN <- create_OCN(dimX, dimY, 
+                    cellsize = cellsize, 
+                    outletPos = outletPos, 
+                    expEnergy = expEnergy, 
+                    coolingRate = coolingRate)
+  OCN <- landscape_OCN(OCN, slope0 = slope0)
+  
+  #Determine the threshold area that generates the number of patches closest to "patches" argument
+  thrA <- as.data.table(
+    OCNet::find_area_threshold_OCN(OCN=OCN, thrValues=seq(0.5,50,0.05))) %>%
+    .[which.min(abs(nNodesRN-patches)), thrValues]
+  
+  #thrA = 5*cellsize^2
+  OCN <- aggregate_OCN(OCN, thrA = thrA)
+  
+  if (plot) {
+    draw_thematic_OCN(rep(1, OCN$RN$nNodes),
+                      OCN,
+                      drawNodes=T,
+                      addLegend=T,
+                      cex=1,
+                      backgroundColor = NULL)
+  }
+  
+  graph <- convert_OCN(OCN = OCN, 
+                       out_format = out_format,
+                       out_SSNdir = out_SSNdir)
+  
+  return(graph)
+}
+
+### ~~~~~~~~~~~~~~~~~~~~~~~~~~ add_barrier_to_OCN ~~~~~~~~~~~~~~~~~~~~~~~~~~####
+# in_igraph <- OCN_formatted_list$igraph
+# nbarriers = 4
+
+add_barrier_to_OCN <- function(in_igraph, nbarriers) {
+
+  library(sfnetworks)
+  #Pick node
+  
+  
+  
+  #' this node is on the lower main stem of the network
+  node <- 50
+  
+  subcomponent(in_igraph, v=50, mode='in')
+
+
+}
+
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#### 
 compute_distmat <- function(landscape, torus, idcol='patch') {
@@ -542,6 +567,9 @@ env_traits <- function(species, max_r = 5, min_env = 0, max_env = 1,
     }
     if(optima_spacing == "random"){ #Random assignment of environmental optima
       optima <- runif(n = species, min = min_env, max = max_env)
+    }
+    if (is.numeric(optima_spacing)) {
+      optima <- optima_spacing
     }
   } else {
     if(length(optima)!=species) stop("optima is not a vector of length species")

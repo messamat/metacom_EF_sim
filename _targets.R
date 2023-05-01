@@ -25,9 +25,9 @@ list(
       max_r = 5,
       min_env = 0,
       max_env = 1,
-      env_niche_breadth = 0.3,
+      env_niche_breadth = 0.25,
       plot = T,
-      optima_spacing = 'random'
+      optima_spacing = c(0.40, 0.60)
     )
   ),
   
@@ -79,8 +79,8 @@ list(
   tarchetypes::tar_map(
     values = expand.grid(
       data.table(
-        in_kernel = c(0.05, 0.1, 0.5),
-        in_dispersal = c(0.01, 0.1)
+        in_kernel = 0.1,
+        in_dispersal = c(0.01, 0.1, 0.5)
       )
     ) %>%
       setDT %>%
@@ -88,7 +88,8 @@ list(
                        in_dispersal = 0)
             ) %>%
       .[, scenario_name := paste0("kernel_", in_kernel, 
-                                  "_dispersal_", in_dispersal)]
+                                  "_dispersal_", in_dispersal)] %>%
+      unique
     ,
     
     names = "scenario_name",
@@ -103,7 +104,7 @@ list(
     ),
     
     tar_target(
-      sim_sp1,
+      sim_sp2,
       simulate_MC(#timesteps = 1200, 
         burn_in = 800,
         initialization = 200,
@@ -120,8 +121,33 @@ list(
     ),
     
     tar_target(
-      FER_sp1,
-      compare_predobs_env_traits(sim_sp1, subn=10000),
+      sim_sp1,
+      simulate_MC(#timesteps = 1200, 
+        burn_in = 800,
+        initialization = 200,
+        intra = 1,
+        min_inter = 0, 
+        max_inter = 1,
+        dispersal = in_dispersal,
+        landscape = OCN_formatted_list$igraph,
+        disp_mat = disp_mat,
+        env_df = env_df,
+        env_traits_df = env_traits_df,
+        species = 1
+      )
+    ),
+    
+    #Compare with one vs. two species and with three different levels of dispersal
+    tar_target(
+      FER_sp2,
+      compare_predobs_env_traits(sim_sp2, subn=10000),
     )
+    
+    #Add barriers
+    
+    
+    #Check at the scale of a site over time vs. a snapshot of all sites
+  
+    
   )
 )
