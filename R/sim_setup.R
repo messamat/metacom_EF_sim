@@ -190,35 +190,46 @@ generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
 }
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ add_barrier_to_OCN ~~~~~~~~~~~~~~~~~~~~~~~~~~####
-<<<<<<< HEAD
-# in_igraph <- tar_read(OCN_formatted_list)$igraph
-=======
-# in_igraph <- OCN_formatted_list$igraph
->>>>>>> 52f1718d2425e2220be84c88e8f4bf8f6cdca7db
-# nbarriers = 4
-
 add_barrier_to_OCN <- function(in_igraph, nbarriers) {
-
-  library(sfnetworks)
-  #Pick node
+  #Draw random vertices downstream of which to model a barrier
+  barriers <- sample(V(in_igraph), size=nbarriers)
   
+  #Identify upstream vertices for each barrier
+  vlist_upst_barriers <- lapply(barriers, function(in_v) {
+    return(as.integer(subcomponent(in_igraph, v=in_v, mode='in')))
+  })
   
+  #Assign sub-graphs to each barrier
+  barriers_order <- order(unlist(lapply(vlist_upst_barriers, length))) #Order barriers from upstream to downstream
+  barriers_ordered <- as.integer(barriers[barriers_order])
+  vlist_upst_barriers_ordered <- vlist_upst_barriers[barriers_order]
+  subgraphs_vlist <- list()
+  upstream_total <- c()
+  for (i in seq_along(barriers_ordered)) {
+    #print(i)
+    subgraphs_vlist[[i]] <- setdiff(vlist_upst_barriers_ordered[[i]], upstream_total)
+    upstream_total <- append(upstream_total, subgraphs_vlist[[i]])
+  }
   
-  #' this node is on the lower main stem of the network
-  node <- 50
+  #Get downstream-most subgraph
+  subgraphs_vlist[[nbarriers+1]] <- setdiff(as.integer(V(in_igraph)), 
+                                            upstream_total) 
   
-  subcomponent(in_igraph, v=50, mode='in')
-
-
+  #Split graph into those sub-graphs and return them
+  subgraphs <- lapply(subgraphs_vlist, function(graph_vlist) {
+    subgraph(graph=in_igraph, vids=graph_vlist)
+  })
+    
+  return(subgraphs)
 }
-
+  
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ compute_distmat ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#### 
-compute_distmat <- function(landscape, torus, idcol='patch') {
+compute_distmat_inner <- function(landscape, torus=TRUE, idcol='patch') {
   if (inherits(landscape, 'igraph')) {
     dist_mat <- igraph::distances(landscape)
     colnames(dist_mat) <- get.vertex.attribute(landscape, 'patch')
-    rownames(dist_mat) <- get.vertex.attribute(landscape, 'patch')
+    rownames(dist_mat) <- colnames(dist_mat)
   } else {
     #Compute distance among sites
     if(torus == TRUE){
@@ -229,6 +240,15 @@ compute_distmat <- function(landscape, torus, idcol='patch') {
   }
   
   return(dist_mat)
+}
+
+compute_distmat <- function(landscape, torus=TRUE, idcol='patch') {
+  if (inherits(landscape, 'list')) {
+    dist_mat_bound <- lapply(landscape, compute_distmat_inner)
+    return(dist_mat_bound)
+  } else {
+    compute_distmat_inner(landscape=landscape, torus=torus, idcol=idcol)
+  }
 }
 
 
@@ -258,25 +278,57 @@ compute_distmat <- function(landscape, torus, idcol='patch') {
 #' @export
 #'
 #'
-dispersal_matrix <- function(landscape, torus = TRUE, 
+#'
+compute_disp_mat_inner <- function(dist_mat, kernel_exp) {
+  disp_mat_inner <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
+  diag(disp_mat_inner) <- 0
+  disp_mat_inner <- apply(disp_mat_inner, 1, function(x) x / sum(x)) #Standard into relative probability
+  
+  if (length(disp_mat_inner) == 1) {
+    disp_mat_inner <- matrix(disp_mat_inner)
+    colnames(disp_mat_inner) <- colnames(dist_mat)
+    rownames(disp_mat_inner) <- colnames(disp_mat_inner)
+  }
+  return(disp_mat_inner)
+}
+
+
+dispersal_matrix <- function(landscape, nbarriers, torus = TRUE, 
                              kernel_exp = 0.1, plot = TRUE){
+  
+  if (!missing(nbarriers)) {
+    if (nbarriers > 0) {
+      landscape <- add_barrier_to_OCN(in_igraph=landscape, nbarriers=nbarriers)
+    }
+  }
   
   dist_mat <- compute_distmat(landscape = landscape,
                               torus = torus)
   
-  disp_mat <- exp(-kernel_exp * dist_mat) #Exponential decrease in dispersal with distance (see equation 4; 0.1 is Li)
-  diag(disp_mat) <- 0
-  disp_mat <- apply(disp_mat, 1, function(x) x / sum(x)) #Standard into relative probability
+  #If distance matrices are separate because networks are disconnected
+  if (inherits(dist_mat, 'list')) {
+    minlength <- min(sapply(dist_mat, length, simplify=T))
+    disp_mat <- lapply(dist_mat, function(in_mat) {
+      compute_disp_mat_inner(in_mat, kernel_exp=kernel_exp)  
+    }) %>%
+      do.call(plyr::rbind.fill.matrix, .)
+    disp_mat[is.na(disp_mat)] <- 0 #Set probability of dispersal to 0 for disconnected vertices
+  } else{
+    minlength <- length(dist_mat)
+    disp_mat <- compute_disp_mat_inner(dist_mat, 
+                                       kernel_exp = kernel_exp)
+  }
   
-  
-  if (sum(colSums(disp_mat) > 1.001) > 0)
+  if (sum(colSums(disp_mat) > 1.001) > 0) {
     warning ("dispersal from a patch to all others exceeds 100%. 
   Make sure the rowSums(disp_mat) <= 1")
-  if (sum(colSums(disp_mat) < 0.999) > 0) 
+  }
+  if ((sum(colSums(disp_mat) < 0.999) > 0) & minlength > 1) {
     warning ("dispersal from a patch to all others is less than 100%. 
            Some dispersing individuals will be lost from the metacommunity")
+  }
   
-  if (plot == TRUE){
+  if (plot == TRUE & minlength > 1){
     plot_dispersal_matrix(disp_mat) 
   }
   

@@ -18,7 +18,7 @@ list(
                                     format(Sys.time(), "%H%M")))
     )
   ),
-  
+
   tar_target(
     env_traits_df,
     env_traits(
@@ -62,10 +62,15 @@ list(
       theme(legend.position = 'none')
   ),
   
-  tar_target(
-    dist_mat,
-    compute_distmat(landscape = OCN_formatted_list$igraph)
-  ),
+  # tar_target(
+  #   dist_mat,
+  #   compute_distmat(landscape = OCN_formatted_list$igraph)
+  # ),
+  # 
+  # tar_target(
+  #   dist_mat_wbarriers,
+  #   compute_distmat(landscape = OCN_withbarriers)
+  # ),
   
   tar_target(
     int_mat,
@@ -75,42 +80,47 @@ list(
                     max_inter = 0.5, 
                     comp_scaler = 0.05,
                     plot = TRUE)
-  ),
-  
+  )
+  ,
+
   tarchetypes::tar_map(
     values = expand.grid(
       data.table(
         in_kernel = 0.1,
-        in_dispersal = c(0.01, 0.1, 0.5)
+        in_dispersal = c(0.01, 0.1, 0.5),
+        nbarriers = c(0, 10)
       )
     ) %>%
+      unique %>%
       setDT %>%
-      rbind(data.table(in_kernel = 0, 
-                       in_dispersal = 0)
-            ) %>%
-      .[, scenario_name := paste0("kernel_", in_kernel, 
-                                  "_dispersal_", in_dispersal)] %>%
-      unique
+      rbind(data.table(in_kernel = 0,
+                       in_dispersal = 0,
+                       nbarriers = 0)
+      ) %>%
+      .[, scenario_name := paste0("kernel_", in_kernel,
+                                  "_dispersal_", in_dispersal,
+                                  "_nbarriers_", nbarriers)] 
     ,
-    
+
     names = "scenario_name",
-      
+
     tar_target(
       disp_mat,
       dispersal_matrix(
         landscape = OCN_formatted_list$igraph,
-        kernel_exp = in_kernel, 
-        plot = TRUE
+        kernel_exp = in_kernel,
+        plot = FALSE,
+        nbarriers = nbarriers
       )
     ),
-    
+
     tar_target(
       sim_sp2,
-      simulate_MC(#timesteps = 1200, 
+      simulate_MC(#timesteps = 1200,
         burn_in = 800,
         initialization = 200,
         intra = 1,
-        min_inter = 0, 
+        min_inter = 0,
         max_inter = 1,
         dispersal = in_dispersal,
         landscape = OCN_formatted_list$igraph,
@@ -120,35 +130,32 @@ list(
         int_mat = int_mat,
       )
     ),
-    
-    tar_target(
-      sim_sp1,
-      simulate_MC(#timesteps = 1200, 
-        burn_in = 800,
-        initialization = 200,
-        intra = 1,
-        min_inter = 0, 
-        max_inter = 1,
-        dispersal = in_dispersal,
-        landscape = OCN_formatted_list$igraph,
-        disp_mat = disp_mat,
-        env_df = env_df,
-        env_traits_df = env_traits_df,
-        species = 1
-      )
-    ),
-    
+
+    # tar_target(
+    #   sim_sp1,
+    #   simulate_MC(#timesteps = 1200,
+    #     burn_in = 800,
+    #     initialization = 200,
+    #     intra = 1,
+    #     min_inter = 0,
+    #     max_inter = 1,
+    #     dispersal = in_dispersal,
+    #     landscape = OCN_formatted_list$igraph,
+    #     disp_mat = disp_mat,
+    #     env_df = env_df,
+    #     env_traits_df = env_traits_df,
+    #     species = 1
+    #   )
+    # ),
+
     #Compare with one vs. two species and with three different levels of dispersal
     tar_target(
       FER_sp2,
       compare_predobs_env_traits(sim_sp2, subn=10000),
     )
-    
-    #Add barriers
-    
-    
-    #Check at the scale of a site over time vs. a snapshot of all sites
-  
-    
   )
+  #Add barriers
+  
+  
+  #Check at the scale of a site over time vs. a snapshot of all sites
 )

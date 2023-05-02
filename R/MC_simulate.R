@@ -48,7 +48,7 @@ simulate_MC <- function(
   initialization = 200, max_r = 5,
   min_env = 0, max_env = 1, env_niche_breadth = 0.5, optima_spacing = "random",
   intra = 1, min_inter = 0, max_inter = 1, comp_scaler = 0.05,
-  extirp_prob = 0.002,
+  extirp_prob = 0,
   landscape, disp_mat, env_df, env_traits_df, int_mat){
   
 
