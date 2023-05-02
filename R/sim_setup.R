@@ -190,7 +190,11 @@ generate_OCN_formatted <- function(patches, out_format, out_SSNdir,
 }
 
 ### ~~~~~~~~~~~~~~~~~~~~~~~~~~ add_barrier_to_OCN ~~~~~~~~~~~~~~~~~~~~~~~~~~####
+<<<<<<< HEAD
 # in_igraph <- tar_read(OCN_formatted_list)$igraph
+=======
+# in_igraph <- OCN_formatted_list$igraph
+>>>>>>> 52f1718d2425e2220be84c88e8f4bf8f6cdca7db
 # nbarriers = 4
 
 add_barrier_to_OCN <- function(in_igraph, nbarriers) {
