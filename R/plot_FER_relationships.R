@@ -163,7 +163,9 @@ plot_scenarios <- function(in_dynamics_df_sim, in_gam_preds,
          )+
     facet_grid(dispersal_p~nbarriers, labeller=label_both) +
     theme_bw() +
-    theme(legend.position = 'none')
+    theme(legend.position = 'none',
+          text = element_text(size=18),
+          panel.grid.minor = element_blank())
   
   if (display_points) {
     rcompare_plot <- rcompare_plot + geom_point(alpha=0.1, aes(y=100*N_stand))
@@ -209,10 +211,12 @@ plot_10patches <- plot_scenarios(
         axis.title.y = element_text(hjust=-0.5)
         )
 
-dynamics_df_sim_1patch <- dynamics_df_sim[patch == 5,]
-# gampreds_1patch <- compute_gampreds(
-#   in_dynamics_df_sim = dynamics_df_sim_1patch,
-#   k=1)
+
+gampreds_1patch <- compute_gampreds(
+  in_dynamics_df_sim = dynamics_df_sim_1patch,
+  k=1)
+
+dynamics_df_sim_1patch <- dynamics_df_sim[patch == 4,]
 plot_1patch <- plot_scenarios(
   in_gam_preds = gampreds_1patch[dispersal_p == 0.1,],
   in_dynamics_df_sim = dynamics_df_sim_1patch[dispersal_p == 0.1,],
@@ -225,5 +229,11 @@ plot_1patch <- plot_scenarios(
   ) + 
   geom_smooth(aes(y=100*N_stand), se=FALSE, method='loess', 
               span=1, fullrange = T)
+plot_1patch 
 
-plot_10patches / plot_1patch + plot_layout(height=c(3,1))
+pdf(paste0('simulated_FER_', format(Sys.Date(), "%Y%m%d"), '.pdf'), 
+    width=6,
+    height=8
+    )
+plot_10patches / plot_1patch + plot_layout(height=c(2,1))
+dev.off()

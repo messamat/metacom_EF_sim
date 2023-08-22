@@ -1,4 +1,4 @@
-subpatch <- 10
+subpatch <- 20
 
 #--------------- Get scenarios output data ------------------------------------
 scenario_list <- c(
@@ -7,9 +7,12 @@ scenario_list <- c(
   # 'sim_sp1_kernel_0.1_dispersal_0.1',
   # 'sim_sp1_kernel_0.1_dispersal_0.5',
   #'sim_sp2_kernel_0_dispersal_0',
-  'sim_sp2_kernel_0.1_dispersal_0.01',
-  'sim_sp2_kernel_0.1_dispersal_0.1',
-  'sim_sp2_kernel_0.1_dispersal_0.5'
+  'sim_sp2_kernel_0.1_dispersal_0.01_nbarriers_0',
+  'sim_sp2_kernel_0.1_dispersal_0.1_nbarriers_0',
+  'sim_sp2_kernel_0.1_dispersal_0.5_nbarriers_0',
+  'sim_sp2_kernel_0.1_dispersal_0.01_nbarriers_10',
+  'sim_sp2_kernel_0.1_dispersal_0.1_nbarriers_10',
+  'sim_sp2_kernel_0.1_dispersal_0.5_nbarriers_10'
 )
 
 
@@ -24,7 +27,8 @@ simdt <- lapply(scenario_list, function(scenario) {
       scenario = scenario,
       sp_num = as.numeric(substr(scenario_split[2], 3,4)),
       kernel = as.numeric(scenario_split[4]),
-      dispersal_p = as.numeric(scenario_split[6])
+      dispersal_p = as.numeric(scenario_split[6]),
+      nbarriers = as.numeric(scenario_split[8])
     )
   )
 }) %>% 
@@ -35,7 +39,7 @@ dynamics_df_sim <- setDT(simdt)[time>=0,]
 compute_gampreds <- function(in_dynamics_df_sim, k) {
   env_preds <- data.frame(env=seq(0, 1, 0.01))
   scenario_species_combinations <- unique(in_dynamics_df_sim[
-    , c('scenario', 'species'), with=F])
+    , c('scenario', 'species', 'dispersal_p', 'nbarriers'), with=F])
   
   gam_preds <- mapply(function(in_scenario, in_species) {
     in_dt <- in_dynamics_df_sim[scenario==in_scenario & 
@@ -48,12 +52,12 @@ compute_gampreds <- function(in_dynamics_df_sim, k) {
                            multicore=T)
     
     gam_trained_10 <- qgam(gam_form, #cubic splines are good when lots of data points
-                           data=in_dt, 
+                           data=in_dt,
                            qu =0.1,
                            multicore=T)
-    
+
     gam_trained_90 <- qgam(gam_form, #cubic splines are good when lots of data points
-                           data=in_dt, 
+                           data=in_dt,
                            qu =0.9,
                            multicore=T)
     
@@ -88,22 +92,25 @@ compute_gampreds <- function(in_dynamics_df_sim, k) {
                    fit_90_stand = 100*fit_90/max(fit_50)
   )]
   predcols = c('fit_50_stand', 'fit_10_stand', 'fit_90_stand')
-  gam_preds[, (predcols) := lapply(.SD, 
-                                   function(x) fifelse(x<0, 0, x)), 
-            .SDcols = predcols]
+  
+  gam_preds <- gam_preds[, (predcols) := lapply(.SD, 
+                                                function(x) fifelse(x<0, 0, x)), 
+                         .SDcols = predcols] %>%
+    merge(scenario_species_combinations, by=c('scenario', 'species'))
   
   return(gam_preds)
 }
 
 
 plot_scenarios <- function(in_dynamics_df_sim, in_gam_preds,
-                           display_points=FALSE) {
+                           display_points=FALSE, gam=TRUE) {
   in_dynamics_df_sim <- in_dynamics_df_sim[order(time),
                                            `:=`(
                                              Nlag1 = shift(N, n=1, type='lag'),
                                              envlag1 = shift(env, n=1, type='lag')
                                            ),
-                                           by=.(species, patch, scenario)] %>%
+                                           by=.(species, patch, scenario,
+                                                dispersal_p, nbarriers)] %>%
     .[Nlag1 > 0, r_obs := N/Nlag1] %>%
     .[, N_stand := N/max(in_gam_preds$fit_50)]
   #.[, N_stand := (N-min(N))/(max(N)-min(N))]
@@ -137,25 +144,44 @@ plot_scenarios <- function(in_dynamics_df_sim, in_gam_preds,
   
   
   rcompare_plot<- ggplot(data=in_dynamics_df_sim,
-                         aes(x=env, group=factor(species), 
+                         aes(x=100*env, group=factor(species), 
                              fill=factor(species),
                              color=factor(species))) + 
-    geom_ribbon(data=in_gam_preds, aes(ymin=fit_10_stand, ymax=fit_90_stand),
-                alpha=0.3, color=NA, size=1) +
-    geom_line(data=in_gam_preds, aes(y=fit_50_stand)) +
-    facet_wrap(~scenario) +
-    geom_line(data=env_traits_curves, aes(x=env, y=100*r_stand),
+    geom_line(data=env_traits_curves, 
+              aes(x=100*env, y=100*r_stand),
               #color='black', 
-              size=1, linetype='dashed') +
-    theme_bw()
+              size=1, linetype='dashed', alpha=0.75) +
+    scale_x_continuous(limits=c(0,100), expand=c(0,0)) +
+    scale_y_continuous(limits=c(0,120),
+                       expand=c(0,0), 
+                       breaks=seq(0,100, 25)) +
+    scale_color_manual(values=c('#fbbd08ff', '#094561bf')) +
+    scale_fill_manual(values=c('#fbbd08ff', '#094561bf')) +
+    labs(x='Environment', 
+         y=stringr::str_wrap('Relative population size (solid) and habitat suitability (dashed)',
+                   width=40)
+         )+
+    facet_grid(dispersal_p~nbarriers, labeller=label_both) +
+    theme_bw() +
+    theme(legend.position = 'none')
   
   if (display_points) {
-    rcompare_plot <- rcompare_plot + geom_point(alpha=1/2, aes(y=100*N_stand))
+    rcompare_plot <- rcompare_plot + geom_point(alpha=0.1, aes(y=100*N_stand))
+  }
+  
+  if (gam) {
+    rcompare_plot <- rcompare_plot + geom_ribbon(data=in_gam_preds, 
+                                                 aes(ymin=fit_10_stand, ymax=fit_90_stand),
+                                                 alpha=0.3, color=NA, size=1) +
+      geom_line(data=in_gam_preds, 
+                aes(y=fit_50_stand),
+                size=1, alpha=0.75) 
   }
   
   return(rcompare_plot)
 }
 
+set.seed(0)
 patch_sample <- sample(unique(dynamics_df_sim$patch), subpatch)
 dynamics_df_sim_10patches <- dynamics_df_sim[patch %in% patch_sample,]
 # if (!missing(subpatch)) {
@@ -171,17 +197,33 @@ dynamics_df_sim_10patches <- dynamics_df_sim[patch %in% patch_sample,]
 gampreds_10patches <- compute_gampreds(
   in_dynamics_df_sim = dynamics_df_sim_10patches,
   k=3)
-plot_10patches <- plot_scenarios(
-  in_gam_preds = gampreds_10patches,
-  in_dynamics_df_sim = dynamics_df_sim_10patches)
-plot_10patches
 
-dynamics_df_sim_1patch <- dynamics_df_sim[patch == 4,]
-gampreds_1patch <- compute_gampreds(
-  in_dynamics_df_sim = dynamics_df_sim_1patch,
-  k=2)
+plot_10patches <- plot_scenarios(
+  in_gam_preds = gampreds_10patches[dispersal_p %in% c(0.1, 0.5),],
+  in_dynamics_df_sim = dynamics_df_sim_10patches[dispersal_p %in% c(0.1, 0.5),],
+  display_points = FALSE,
+  gam=TRUE) +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(hjust=-0.5)
+        )
+
+dynamics_df_sim_1patch <- dynamics_df_sim[patch == 5,]
+# gampreds_1patch <- compute_gampreds(
+#   in_dynamics_df_sim = dynamics_df_sim_1patch,
+#   k=1)
 plot_1patch <- plot_scenarios(
-  in_gam_preds = gampreds_1patch,
-  in_dynamics_df_sim = dynamics_df_sim_1patch,
-  display_points = TRUE)
-plot_1patch
+  in_gam_preds = gampreds_1patch[dispersal_p == 0.1,],
+  in_dynamics_df_sim = dynamics_df_sim_1patch[dispersal_p == 0.1,],
+  display_points = TRUE,
+  gam=FALSE) +
+  theme(axis.title.y = element_blank(),
+        strip.background.x = element_blank(),
+        strip.text.x = element_blank(),
+        plot.background = element_blank()
+  ) + 
+  geom_smooth(aes(y=100*N_stand), se=FALSE, method='loess', 
+              span=1, fullrange = T)
+
+plot_10patches / plot_1patch + plot_layout(height=c(3,1))
